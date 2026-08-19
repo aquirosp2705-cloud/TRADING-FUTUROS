@@ -87,6 +87,15 @@
   .ficha .et{color:var(--muted);}
   .ficha .vl{font-weight:800; font-variant-numeric:tabular-nums; text-align:right;}
   .ficha .n{display:inline-block; width:19px; height:19px; line-height:19px; text-align:center; background:var(--chip); border-radius:50%; font-size:11px; font-weight:700; color:var(--text); margin-right:7px;}
+  .resumen{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0 4px;}
+  @media(max-width:520px){ .resumen{grid-template-columns:1fr;} }
+  .rcel{padding:12px 10px; border-radius:9px; text-align:center; background:var(--panel2); border:1.5px solid var(--border);}
+  .rcel.inv{border-color:var(--blue); background:#111c2e;}
+  .rcel.gan{border-color:var(--green); background:#101d16;}
+  .rcel.per{border-color:var(--red); background:#1e1214;}
+  .rcel .rt{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:5px; font-weight:700;}
+  .rcel .rv{display:block; font-size:23px; font-weight:800; font-variant-numeric:tabular-nums; line-height:1.1;}
+  .rcel .rs{display:block; font-size:11.5px; color:var(--muted); margin-top:4px;}
   #estudio{margin-top:12px;}
   #estudio h3{font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:8px;}
   .ctx{padding:10px 14px; border-radius:8px; font-size:13.5px; margin-bottom:10px; border:1px solid var(--border); background:var(--panel2);}
@@ -171,8 +180,19 @@
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
       <div class="campo"><label>Moneda</label><input id="monedaConsulta" placeholder="Ej.: BTC, SOL…" maxlength="20"></div>
       <div class="campo"><label>Valor a invertir (US$)</label><input type="number" id="montoInvertir" placeholder="Automático" min="1" step="5" style="width:140px"></div>
+      <div class="campo"><label>Apalancamiento</label>
+        <select id="levConsulta" style="width:135px">
+          <option value="1">1x (sin apalanc.)</option>
+          <option value="2">2x</option>
+          <option value="3" selected>3x (recomendado)</option>
+          <option value="5">5x</option>
+          <option value="10">10x</option>
+          <option value="15">15x</option>
+          <option value="20">20x (peligroso)</option>
+        </select>
+      </div>
       <button id="btnConsultar" onclick="consultarMoneda()">Dame la asesoría</button>
-      <span class="pista">Apalancamiento fijo de <b>3x en margen aislado</b>. Si dejas la inversión vacía, la calculo con tu regla de riesgo de arriba.</span>
+      <span class="pista">Siempre en <b>margen aislado</b>. Si dejas la inversión vacía, la calculo con tu regla de riesgo de arriba.</span>
     </div>
     <div id="estudio" style="display:none"></div>
     <div id="recomendacion" class="nota" style="margin-top:12px; display:none"></div>
@@ -207,9 +227,9 @@
     <p><b>Qué hace el radar:</b> consulta en vivo las 30 monedas con más volumen en futuros de Binance y les aplica tres filtros técnicos:
     la <b>tendencia</b> (medias móviles de 20, 50 y 200 periodos alineadas), el <b>RSI</b> (que el precio no esté "sobrecalentado")
     y la <b>volatilidad</b> (que la moneda se mueva lo suficiente, pero no de forma salvaje). Solo cuando los tres filtros pasan, marca LONG (apostar a que sube) o SHORT (apostar a que baja). Si algo no cuadra, dice ESPERAR — y esperar también es una decisión de trading.</p>
-    <p><b>Estudio experto de las 10 primeras:</b> después de cada análisis, la app estudia a fondo las 10 monedas mejor situadas, como haría un operador con experiencia: comprueba si la <b>temporalidad mayor</b> confirma la señal (dos temporalidades de acuerdo es lo más fiable que hay), si el <b>volumen</b> acompaña, si el precio está <b>pegado a su media</b> (entrar sano) o disparado (perseguir), si el <b>funding</b> está caro en tu contra, y sobre todo hacia dónde va <b>Bitcoin</b>, porque casi todas las monedas lo siguen. De ahí sale una nota de 0 a 100, un veredicto por moneda y una recomendación razonada. Si la mejor candidata no convence, te lo dice.</p>
+    <p><b>Estudio experto de las 10 primeras:</b> después de cada análisis, la app estudia a fondo las 10 monedas mejor situadas, como haría un operador con experiencia: comprueba si la <b>temporalidad mayor</b> confirma la señal (dos temporalidades de acuerdo es lo más fiable que hay), si la tendencia es <b>limpia o picada</b> (un mercado que sube dando tumbos barre los stops aunque la dirección sea correcta: es la forma más común de perder teniendo razón), si el <b>volumen</b> acompaña, si el precio está <b>pegado a su media</b> (entrar sano) o disparado (perseguir), si el <b>funding</b> está caro en tu contra, y sobre todo hacia dónde va <b>Bitcoin</b>, porque casi todas las monedas lo siguen. De ahí sale una nota de 0 a 100, un veredicto por moneda y una recomendación razonada. Si la mejor candidata no convence, te lo dice.</p>
     <p><b>Asesoría por moneda:</b> tras analizar el mercado, puedes escribir cualquier moneda (aunque no esté entre las 30) y la app la consulta en vivo, aplica los mismos filtros y te da el plan completo con <b>apalancamiento fijo de 3x en margen aislado</b>: dirección, con cuánto entrar, stop loss y take profit. Puedes escribir cuánto quieres invertir en US$ (ese monto es tu margen aislado) y la app te avisa si con esa inversión arriesgas más de tu regla de riesgo; si lo dejas vacío, calcula la inversión por ti. Si los filtros no se cumplen, te lo dice con claridad antes de mostrarte nada.</p>
-    <p><b>Stop Loss (SL):</b> el precio donde la operación se cierra sola si vas perdiendo. Se calcula con la volatilidad real de la moneda (1.5 veces el ATR), no con un número inventado. <b>Nunca operes sin stop loss.</b> Eso sí: en movimientos muy bruscos el stop puede ejecutarse a un precio algo peor del indicado (se llama deslizamiento); con margen aislado, el tope absoluto de pérdida es el margen que depositaste en esa operación.</p>
+    <p><b>Stop Loss (SL):</b> el precio donde la operación se cierra sola si vas perdiendo. Se calcula con la volatilidad real de la moneda (1.5 veces el ATR) y, cuando hace falta, se aleja para quedar <b>detrás del mínimo o máximo reciente</b> del mercado — así no salta por el vaivén normal del precio. <b>Nunca operes sin stop loss.</b> Eso sí: en movimientos muy bruscos el stop puede ejecutarse a un precio algo peor del indicado (se llama deslizamiento); con margen aislado, el tope absoluto de pérdida es el margen que depositaste en esa operación.</p>
     <p><b>Take Profit (TP):</b> el precio donde tomas la ganancia. Se coloca para ganar 2 veces lo que arriesgas (configurable). Con 2 a 1 te basta acertar algo más de 1 de cada 3 veces para no perder (antes de comisiones) — pero nadie puede garantizarte una tasa de acierto: la relación beneficio:riesgo solo controla cuánto ganas o pierdes en cada caso, no cuál de los dos ocurre.</p>
     <p><b>La regla del 1%:</b> en cada operación solo arriesgas el 1% de tu capital ($5 si tienes $500). El tamaño de la posición se calcula al revés de como lo hace la mayoría: primero se fija cuánto estás dispuesta a perder, y de ahí sale cuántas monedas comprar. Con esta regla necesitarías ~100 pérdidas seguidas para quebrar la cuenta.</p>
     <p><b>Margen aislado:</b> es el dinero que "depositas" en esa operación concreta. Si sale muy mal, lo máximo que pierdes es ese margen — el resto de tu cuenta queda protegido. Por eso esta herramienta siempre asume margen aislado, nunca cruzado.</p>
@@ -241,7 +261,10 @@ let mapaSimbolos = null; // clasificación de cada símbolo (cripto / acción / 
 let tfUsado = "1h";      // temporalidad con la que se calculó el último análisis
 let fundingHorasMap = {}; // intervalos de funding distintos al estándar de 8 h
 let filtros = {};         // por símbolo: tick de precio, paso de cantidad y mínimo de posición
-const LEV_CONSULTA = 3;   // apalancamiento fijo de la asesoría por moneda
+// Apalancamiento elegido por la usuaria en la asesoría (3x por defecto).
+function levConsulta(){
+  return parseInt(document.getElementById("levConsulta").value) || 3;
+}
 
 document.getElementById("auto").addEventListener("change", e => {
   if (e.target.checked) { timerAuto = setInterval(analizar, 60000); }
@@ -283,6 +306,22 @@ function rsi(cierres, p){
   }
   if (al === 0) return 100;
   return 100 - 100 / (1 + ag / al);
+}
+// Eficiencia de Kaufman: cuánto del recorrido total fue avance real y cuánto vaivén.
+// Cerca de 1 = tendencia limpia. Cerca de 0 = mercado picado, donde los stops saltan
+// por puro ruido aunque la dirección de fondo sea correcta.
+// Volumen de las últimas 10 velas frente al de las últimas 100.
+function media10(velas){
+  const v = velas.map(x => parseFloat(x[5]));
+  const m = a => a.reduce((s,x) => s + x, 0) / a.length;
+  return m(v.slice(-10)) / (m(v.slice(-100)) || 1);
+}
+function eficiencia(cierres, n){
+  const c = cierres.slice(-(n + 1));
+  if (c.length < n + 1) return 0;
+  let recorrido = 0;
+  for (let i = 1; i < c.length; i++) recorrido += Math.abs(c[i] - c[i-1]);
+  return recorrido ? Math.abs(c[c.length-1] - c[0]) / recorrido : 0;
 }
 function atr(altos, bajos, cierres, p){
   const trs = [];
@@ -392,6 +431,9 @@ async function analizar(){
           funding: funding[t.symbol],
           fundingHoras: fundingHorasMap[t.symbol] || 8,
           volRatio: media(vols.slice(-10)) / (media(vols.slice(-100)) || 1),
+          efic: eficiencia(cierres, 20),
+          minRec: Math.min.apply(null, bajos.slice(-20)),
+          maxRec: Math.max.apply(null, altos.slice(-20)),
           cierres: cierres.slice(-60)
         };
         d.atrPct = d.atr / precio * 100;
@@ -535,9 +577,9 @@ async function estudiarMercado(){
     }
     const long = d.senal === "LONG";
     const notas = [];
-    // El filtro técnico aporta como mucho 35 puntos; los otros 65 los da el estudio
-    // experto, para que la nota distinga de verdad entre candidatas parecidas.
-    let pts = d.score * 0.35;
+    // El filtro técnico aporta como mucho 25 puntos; el resto lo da el estudio experto,
+    // para que la nota distinga de verdad entre candidatas parecidas.
+    let pts = d.score * 0.25;
 
     if (h){
       if (long ? h.alcista : h.bajista){
@@ -555,6 +597,18 @@ async function estudiarMercado(){
     } else if (d.volRatio < 0.7){
       pts -= 8;
       notas.push("✘ Volumen flojo (" + d.volRatio.toFixed(1) + " veces lo habitual): el movimiento tiene poca convicción detrás.");
+    }
+
+    // Mercado limpio vs. picado. Es la causa nº1 de que salte el stop teniendo razón
+    // en la dirección: el precio va al sitio, pero dando tumbos que barren los stops.
+    if (d.efic >= 0.35){
+      pts += 14;
+      notas.push("✔ La tendencia es limpia (eficiencia " + (d.efic*100).toFixed(0) + "%): el precio avanza derecho, sin dar tumbos que barran el stop.");
+    } else if (d.efic < 0.2){
+      pts -= 22;
+      notas.push("✘ Mercado picado (eficiencia " + (d.efic*100).toFixed(0) + "%): sube y baja dando tumbos. Aquí el stop salta por puro ruido aunque la dirección sea la correcta — es la forma más frecuente de perder teniendo razón.");
+    } else {
+      notas.push("• Tendencia irregular (eficiencia " + (d.efic*100).toFixed(0) + "%): avanza, pero con vaivenes.");
     }
 
     const distE = d.atr ? Math.abs(d.precio - d.e20) / d.atr : 0;
@@ -674,7 +728,19 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
 
   const riesgoUSD = capital * riesgoPct / 100;
   const entrada = d.precio;
-  const distSL = ATR_MULT * d.atr;
+  // Un stop puesto solo a X veces el ATR suele caer DENTRO del ruido normal y salta sin
+  // que la idea haya fallado. Un operador lo coloca detrás de la última estructura: por
+  // debajo del mínimo reciente en una compra, por encima del máximo en una venta.
+  let distSL = ATR_MULT * d.atr;
+  let stopEstructural = false;
+  const colchon = 0.3 * d.atr, techo = 3 * d.atr;
+  if (long && d.minRec && d.minRec < entrada){
+    const dEstr = (entrada - d.minRec) + colchon;
+    if (dEstr > distSL && dEstr <= techo){ distSL = dEstr; stopEstructural = true; }
+  } else if (!long && d.maxRec && d.maxRec > entrada){
+    const dEstr = (d.maxRec - entrada) + colchon;
+    if (dEstr > distSL && dEstr <= techo){ distSL = dEstr; stopEstructural = true; }
+  }
   const slBruto = long ? entrada - distSL : entrada + distSL;
   const tpBruto = long ? entrada + rr * distSL : entrada - rr * distSL;
   const distPct = distSL / entrada;
@@ -755,6 +821,15 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
   const filaCom      = fila("Comisiones estimadas", "~$" + comision.toFixed(2));
   const filaFund     = d.funding !== undefined ? fila("Funding (cada " + d.fundingHoras + " h)", (d.funding*100).toFixed(4) + "% · " + descFunding(d.funding, long)) : "";
 
+  // Las tres cifras que de verdad importan, bien grandes y antes que nada.
+  const resumen = "<div class='resumen'>" +
+    "<div class='rcel inv'><span class='rt'>Inviertes</span><span class='rv'>$" + margen.toFixed(2) + "</span>" +
+      "<span class='rs'>margen aislado a " + lev + "x</span></div>" +
+    "<div class='rcel gan'><span class='rt'>Puedes ganar</span><span class='rv up'>+$" + gananciaNeta.toFixed(2) + "</span>" +
+      "<span class='rs'>si toca el Take Profit</span></div>" +
+    "<div class='rcel per'><span class='rt'>Puedes perder</span><span class='rv down'>−$" + perdidaTotal.toFixed(2) + "</span>" +
+      "<span class='rs'>si toca el Stop Loss</span></div></div>";
+
   const filas = gananciaPrimero
     ? filaGananciaTop + filaPerdida + filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaLiq + filaCom + filaFund
     : filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaPerdida + filaGanancia + filaLiq + filaCom + filaFund;
@@ -769,7 +844,17 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
         : "El valor de la posición ($" + nocional.toFixed(2) + ") queda por debajo del mínimo de $" + fl.minPos + " que exige Binance para " + d.nombre + ".") +
       " Sube el «Valor a invertir», o elige una moneda de menor precio unitario.</div>";
 
-  return "<div class='filas'>" + filas + "</div>" +
+  const alertaLiq = (gananciaPrimero && !slAntesDeLiq)
+    ? "<div class='nota alerta' style='border-color:var(--red); background:#2a1214; color:#ffb3b6; font-size:14.5px'>" +
+      "🚫 <b>NO operes con " + lev + "x en esta moneda.</b> A este apalancamiento te liquidarían en " + fmtPrecio(liq, dec) +
+      ", ANTES de que tu stop loss (" + fmtPrecio(sl, dec) + ") alcance a cerrarte. Es decir: tu stop no te protegería, " +
+      "y perderías <b>todo el margen depositado</b>. <b>Baja el apalancamiento</b> hasta que aquí aparezca ✔.</div>"
+    : "";
+
+  return (gananciaPrimero ? resumen + alertaLiq : "") + "<div class='filas'>" + filas + "</div>" +
+    (stopEstructural ? "<div class='nota'>🛡️ El stop no está puesto a una distancia cualquiera: se colocó <b>detrás del " +
+      (long ? "mínimo" : "máximo") + " reciente</b> del mercado, para que no salte por el vaivén normal del precio. " +
+      "Por eso está algo más lejos y la posición es más pequeña — arriesgas lo mismo, pero con más aire.</div>" : "") +
     "<div class='nota'>La pérdida indicada supone que el stop se ejecuta al precio marcado; en movimientos muy bruscos puede llenarse algo peor (deslizamiento). Tope absoluto de pérdida con margen aislado: los $" + margen.toFixed(2) + " depositados. La liquidación exacta la calcula Binance al abrir.</div>" +
     (inversion !== null && invAjustada ? "<div class='nota alerta'>⚠️ No puedes invertir más que tu capital: ajusté la inversión a tu máximo.</div>" : "") +
     (inversion !== null && Math.abs(margen - inversion) > 0.01
@@ -822,11 +907,17 @@ function descFunding(f, long){
   return pagas ? "lo pagas tú" : "lo cobras tú";
 }
 
-// ---------- Asesoría por moneda (apalancamiento fijo 3x aislado) ----------
+// ---------- Asesoría por moneda (margen aislado, apalancamiento elegible) ----------
 let ultimaConsulta = null; // última moneda consultada, para recalcular al cambiar la inversión
 let nivelesPlan = null;    // SL/TP del último plan de asesoría, para validarlos contra el precio de marca
 document.getElementById("monedaConsulta").addEventListener("keydown", e => {
   if (e.key === "Enter") consultarMoneda();
+});
+document.getElementById("levConsulta").addEventListener("change", () => {
+  if (ultimaConsulta){
+    document.getElementById("consultaResultado").innerHTML = htmlConsulta(ultimaConsulta.d, ultimaConsulta.tf);
+    arrancarVigilancia(ultimaConsulta.d);
+  }
 });
 document.getElementById("montoInvertir").addEventListener("change", () => {
   if (!ultimaConsulta) return;
@@ -898,6 +989,10 @@ async function consultarMoneda(){
       atr: atr(altos, bajos, cierres, 14),
       funding: fund,
       fundingHoras: fundingHorasMap[symbol] || 8,
+      volRatio: media10(velas) ,
+      efic: eficiencia(cierres, 20),
+      minRec: Math.min.apply(null, bajos.slice(-20)),
+      maxRec: Math.max.apply(null, altos.slice(-20)),
       cierres: cierres.slice(-60)
     };
     d.atrPct = d.atr / precio * 100;
@@ -926,9 +1021,9 @@ function htmlConsulta(d, tf){
     const long = d.senal === "LONG";
     return cab +
       "<span class='senal " + d.senal + "'>" + (long ? "LONG (comprar)" : "SHORT (vender)") + "</span>" +
-      "<span class='precio'>Puntuación " + d.score + "/100 · velas de " + etiquetaTf(tf) + " · 3x aislado</span></div>" +
+      "<span class='precio'>Puntuación " + d.score + "/100 · velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
       vivo + banner(long) +
-      calcularFilasPlan(d, long, LEV_CONSULTA, true) + ayudaBinance();
+      calcularFilasPlan(d, long, levConsulta(), true) + ayudaBinance();
   }
 
   const razonesHtml = "<ul class='razones'>" + d.razones.map(r => "<li>" + r + "</li>").join("") + "</ul>";
@@ -944,13 +1039,13 @@ function htmlConsulta(d, tf){
 
   const long = alcista;
   return cab + "<span class='senal ESPERAR'>ESPERAR</span>" +
-    "<span class='precio'>velas de " + etiquetaTf(tf) + " · 3x aislado</span></div>" +
+    "<span class='precio'>velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
     vivo +
     "<div class='planVacio'>Mi asesoría ahora mismo es <b>esperar</b> con esta moneda:</div>" + razonesHtml +
     "<div class='nota alerta'>⚠️ Si aun así decides entrar, la tendencia de fondo es " +
     (long ? "<b>alcista → LONG (comprar)</b>" : "<b>bajista → SHORT (vender)</b>") +
-    " y el plan prudente a 3x aislado sería el siguiente — pero recuerda que los filtros NO se cumplen:</div>" +
-    banner(long) + calcularFilasPlan(d, long, LEV_CONSULTA, true) + ayudaBinance();
+    " y el plan prudente a " + levConsulta() + "x aislado sería el siguiente — pero recuerda que los filtros NO se cumplen:</div>" +
+    banner(long) + calcularFilasPlan(d, long, levConsulta(), true) + ayudaBinance();
 }
 
 function ayudaBinance(){
@@ -1049,7 +1144,7 @@ function pintarEstudio(top, btc, htf){
       e.notas.map(n => "<li>" + n + "</li>").join("") + "</ul>" +
       "<div class='cierre'>Nunca abras las 10: <b>una operación a la vez</b>, y como mucho dos. " +
       "Si abres varias en la misma dirección, no estás diversificando — estás multiplicando la misma apuesta, porque todas siguen a Bitcoin.</div>" +
-      "<button onclick=\"asesorarRecomendada('" + mejor.nombre + "')\" style='margin-top:10px; padding:8px 16px; font-size:13.5px; background:var(--green); border:none; color:#fff; font-weight:700; border-radius:7px; cursor:pointer'>Ver su ficha para Binance a 3x</button>" +
+      "<button onclick=\"asesorarRecomendada('" + mejor.nombre + "')\" style='margin-top:10px; padding:8px 16px; font-size:13.5px; background:var(--green); border:none; color:#fff; font-weight:700; border-radius:7px; cursor:pointer'>Ver su ficha para Binance</button>" +
       "</div>";
   }
 
