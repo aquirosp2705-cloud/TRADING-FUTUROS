@@ -87,6 +87,25 @@
   .ficha .et{color:var(--muted);}
   .ficha .vl{font-weight:800; font-variant-numeric:tabular-nums; text-align:right;}
   .ficha .n{display:inline-block; width:19px; height:19px; line-height:19px; text-align:center; background:var(--chip); border-radius:50%; font-size:11px; font-weight:700; color:var(--text); margin-right:7px;}
+  .dictamen{margin:14px 0 6px; padding:15px 18px; border-radius:11px; border:2px solid; display:block;}
+  .dictamen .dt{display:block; font-size:21px; font-weight:800; margin-bottom:5px;}
+  .dictamen .dx{display:block; font-size:14px; color:#c9d4e2;}
+  .dictamen.si{border-color:var(--green); background:#0f1f17;} .dictamen.si .dt{color:var(--green);}
+  .dictamen.quiza{border-color:var(--amber); background:#221a0c;} .dictamen.quiza .dt{color:var(--amber);}
+  .dictamen.no{border-color:var(--red); background:#231114;} .dictamen.no .dt{color:var(--red);}
+  .check{margin:14px 0 4px; padding:14px 16px; background:#101722; border:1.5px solid var(--border); border-radius:10px;}
+  .check h4{font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--text); margin-bottom:10px;}
+  .ci{display:flex; gap:10px; padding:7px 0; border-bottom:1px dashed #273147; font-size:13.5px;}
+  .ci .cm{font-weight:800; font-size:15px; flex:0 0 18px;}
+  .ci.si .cm{color:var(--green);} .ci.no .cm{color:var(--red);}
+  .ci .cd{color:var(--muted); font-size:12.5px;}
+  .cman{margin-top:10px; display:flex; flex-direction:column; gap:7px;}
+  .cman label{display:flex; gap:8px; align-items:flex-start; font-size:13.5px; cursor:pointer;}
+  .cman input{margin-top:3px; width:16px; height:16px; cursor:pointer; flex:0 0 auto;}
+  .veredictoCheck{margin-top:11px; padding:9px 12px; border-radius:7px; font-size:13.5px;}
+  .veredictoCheck.bien{background:rgba(46,163,107,.14); color:var(--green); border:1px solid rgba(46,163,107,.45);}
+  .veredictoCheck.mal{background:rgba(229,72,77,.13); color:#ffb3b6; border:1px solid rgba(229,72,77,.5);}
+  .veredictoCheck.neutro{background:var(--panel2); color:var(--muted); border:1px solid var(--border);}
   .resumen{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0 4px;}
   @media(max-width:520px){ .resumen{grid-template-columns:1fr;} }
   .rcel{padding:12px 10px; border-radius:9px; text-align:center; background:var(--panel2); border:1.5px solid var(--border);}
@@ -206,7 +225,7 @@
     <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th>Moneda</th><th>Precio</th><th>24 h</th><th>Gráfico</th><th>Tendencia</th><th>RSI</th><th>Volat.</th><th>Señal</th><th>Punt.</th>
+        <th>Moneda</th><th>Precio</th><th>24 h</th><th>Gráfico</th><th>Tendencia</th><th>RSI</th><th>Volat.</th><th>Señal</th><th>Punt.</th><th>Veredicto experto</th>
       </tr></thead>
       <tbody id="cuerpoTabla"><tr><td colspan="9" style="text-align:center; color:var(--muted); padding:24px">Sin datos todavía.</td></tr></tbody>
     </table>
@@ -261,6 +280,7 @@ let mapaSimbolos = null; // clasificación de cada símbolo (cripto / acción / 
 let tfUsado = "1h";      // temporalidad con la que se calculó el último análisis
 let fundingHorasMap = {}; // intervalos de funding distintos al estándar de 8 h
 let filtros = {};         // por símbolo: tick de precio, paso de cantidad y mínimo de posición
+let ctxBTC = null;        // tendencia de Bitcoin del último estudio, para el checklist
 // Apalancamiento elegido por la usuaria en la asesoría (3x por defecto).
 function levConsulta(){
   return parseInt(document.getElementById("levConsulta").value) || 3;
@@ -554,23 +574,9 @@ async function tendenciaDe(symbol, intervalo){
   } catch (e){ return null; }
 }
 
-async function estudiarMercado(){
-  const cont = document.getElementById("estudio");
-  const top = datos.slice(0, 10);
-  if (!top.length){ cont.style.display = "none"; return; }
-  cont.style.display = "";
-  cont.innerHTML = "<div class='planVacio'>🧠 Estudiando el mercado de las 10 primeras monedas…</div>";
-
-  const htf = tfSuperior(tfUsado);
-  const btc = await tendenciaDe("BTCUSDT", htf);
-  const tendencias = [];
-  for (let i = 0; i < top.length; i += 5){
-    const lote = top.slice(i, i + 5);
-    tendencias.push(...await Promise.all(lote.map(t => tendenciaDe(t.symbol, htf))));
-  }
-
-  top.forEach((d, i) => {
-    const h = tendencias[i];
+// Evalúa una moneda como lo haría un operador con experiencia. Se usa tanto en el
+// estudio de las 10 primeras como cuando preguntas por una moneda suelta.
+function evaluarExperto(d, h, btc, htf){
     if (d.senal === "ESPERAR"){
       d.exp = { pts: 0, veredicto: "nada", notas: ["No cumple los filtros técnicos básicos, así que ni la estudio a fondo."] };
       return;
@@ -643,15 +649,78 @@ async function estudiarMercado(){
 
     pts = Math.max(0, Math.min(100, Math.round(pts)));
     d.exp = { pts, notas, veredicto: pts >= 68 ? "pref" : pts >= 50 ? "acep" : pts >= 32 ? "ries" : "desc" };
-  });
+}
 
+async function estudiarMercado(){
+  const cont = document.getElementById("estudio");
+  const top = datos.slice(0, 10);
+  if (!top.length){ cont.style.display = "none"; return; }
+  cont.style.display = "";
+  cont.innerHTML = "<div class='planVacio'>🧠 Estudiando el mercado de las 10 primeras monedas…</div>";
+
+  const htf = tfSuperior(tfUsado);
+  const btc = await tendenciaDe("BTCUSDT", htf);
+  ctxBTC = btc; // se guarda para el checklist previo a operar
+  const tendencias = [];
+  for (let i = 0; i < top.length; i += 5){
+    const lote = top.slice(i, i + 5);
+    tendencias.push(...await Promise.all(lote.map(t => tendenciaDe(t.symbol, htf))));
+  }
+
+  top.forEach((d, i) => evaluarExperto(d, tendencias[i], btc, htf));
+
+  pintarTabla(); // el veredicto experto ya está listo: se repinta para que la tabla no contradiga al estudio
   pintarEstudio(top, btc, htf);
+}
+// Respuesta directa a «¿qué te parece esta moneda?»: lo primero que se ve, en grande.
+function dictamen(d, long){
+  const v = d.exp ? d.exp.veredicto : null;
+  const dir = long ? "LONG (comprar)" : "SHORT (vender)";
+  const pts = d.exp ? d.exp.pts : 0;
+  let clase, titulo, texto;
+  if (v === "pref"){
+    clase = "si"; titulo = "SÍ — ábrela en " + dir;
+    texto = "Es una buena candidata (" + pts + "/100): la señal técnica y el mercado van del mismo lado. Sigue la ficha de abajo al pie de la letra.";
+  } else if (v === "acep"){
+    clase = "quiza"; titulo = "PUEDES — en " + dir + ", con prudencia";
+    texto = "Cumple (" + pts + "/100), pero no es de las mejores. Si la operas, hazlo con menos dinero del habitual y revisa el checklist.";
+  } else if (v === "ries"){
+    clase = "quiza"; titulo = "MEJOR NO — es riesgosa";
+    texto = "La señal apunta a " + dir + ", pero el estudio la castiga (" + pts + "/100) por los motivos de abajo. Yo esperaría.";
+  } else {
+    clase = "no"; titulo = "NO la operes";
+    texto = "La señal apunta a " + dir + ", pero el estudio la descarta (" + pts + "/100). Entrar aquí es ir contra el mercado.";
+  }
+  return "<div class='dictamen " + clase + "'><span class='dt'>" + titulo + "</span><span class='dx'>" + texto + "</span></div>";
+}
+
+// Si el estudio experto rechazó o degradó esta moneda, el aviso manda sobre el plan.
+// Nunca se muestra un plan "limpio" de algo que el propio estudio desaconseja.
+function avisoExperto(d){
+  if (!d || !d.exp || d.senal === "ESPERAR") return "";
+  const v = d.exp.veredicto;
+  if (v !== "desc" && v !== "ries") return "";
+  const contras = d.exp.notas.filter(n => n.startsWith("✘"));
+  const dur = v === "desc";
+  return "<div class='nota alerta' style='border-color:" + (dur ? "var(--red)" : "var(--amber)") +
+    "; background:" + (dur ? "#2a1214" : "#2a1f10") + "; color:" + (dur ? "#ffb3b6" : "#e8c877") + "; font-size:14px'>" +
+    (dur ? "🚫 <b>Mi estudio DESCARTA esta operación</b>" : "⚠️ <b>Mi estudio la marca como riesgosa</b>") +
+    " (nota " + d.exp.pts + "/100). La señal técnica existe, pero el mercado no acompaña:" +
+    "<ul style='margin:6px 0 0 18px'>" + contras.map(n => "<li>" + n.replace(/^✘ /, "") + "</li>").join("") + "</ul>" +
+    (dur ? "<div style='margin-top:7px'><b>Mi consejo: no la operes.</b> El plan de abajo se muestra solo para que veas los números, no como recomendación.</div>"
+         : "<div style='margin-top:7px'>Si aun así la operas, hazlo con menos dinero del habitual.</div>") + "</div>";
+}
+const ETIQ_VD = { pref: "Preferida", acep: "Aceptable", ries: "Riesgosa", desc: "NO OPERAR", nada: "Sin señal" };
+function veredictoCelda(d){
+  if (d.senal === "ESPERAR") return "<span style='color:var(--muted)'>—</span>";
+  if (!d.exp) return "<span style='color:var(--muted)'>no estudiada</span>";
+  return "<span class='vd " + d.exp.veredicto + "'>" + ETIQ_VD[d.exp.veredicto] + " " + d.exp.pts + "</span>";
 }
 function pintarTabla(){
   const tb = document.getElementById("cuerpoTabla");
   tb.innerHTML = "";
   if (!datos.length){
-    tb.innerHTML = "<tr><td colspan='9' style='text-align:center; color:var(--muted); padding:24px'>Sin datos.</td></tr>";
+    tb.innerHTML = "<tr><td colspan='10' style='text-align:center; color:var(--muted); padding:24px'>Sin datos.</td></tr>";
     return;
   }
   for (const d of datos){
@@ -667,7 +736,8 @@ function pintarTabla(){
       "<td>" + d.rsi.toFixed(0) + "</td>" +
       "<td>" + d.atrPct.toFixed(2) + "%</td>" +
       "<td><span class='senal " + d.senal + "'>" + d.senal + "</span></td>" +
-      "<td>" + (d.senal === "ESPERAR" ? "—" : d.score) + "</td>";
+      "<td>" + (d.senal === "ESPERAR" ? "—" : d.score) + "</td>" +
+      "<td>" + veredictoCelda(d) + "</td>";
     const celdaGraf = tr.children[3];
     celdaGraf.appendChild(sparkline(d.cierres, d.cierres[d.cierres.length-1] >= d.cierres[0]));
     tr.addEventListener("click", () => { seleccion = d.symbol; pintarTabla(); mostrarPlan(d.symbol); });
@@ -711,6 +781,7 @@ function mostrarPlan(symbol){
     "<div class='planTitulo'><span class='par'>" + d.nombre + "</span>" +
     "<span class='senal " + d.senal + "'>" + (long ? "LONG (comprar)" : "SHORT (vender)") + "</span>" +
     "<span class='precio'>Puntuación " + d.score + "/100 · velas de " + etiquetaTf(tfUsado) + "</span></div>" +
+    avisoExperto(d) +
     calcularFilasPlan(d, long, null);
 }
 
@@ -866,13 +937,82 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
       : "<div class='nota'>✔ Esta inversión respeta tu regla del " + riesgoPct + "%: si el stop salta, pierdes $" + perdidaTotal.toFixed(2) + " (" + (perdidaTotal/capital*100).toFixed(1) + "% de tu capital).</div>") : "") +
     (ajustado ? "<div class='nota alerta'>⚠️ El stop loss de esta moneda está muy cerca del precio, así que la posición completa usaría demasiado margen. Se redujo el tamaño para que el margen no pase del 25% de tu capital; por eso el riesgo real es menor al " + riesgoPct + "%.</div>" : "") +
     (gananciaPrimero
-      ? fichaOrden(d, long, lev, cantidad.toFixed(decQty), margen, sl, tp, dec)
+      ? fichaOrden(d, long, lev, cantidad.toFixed(decQty), margen, sl, tp, dec) + checklist(d, long, slAntesDeLiq, !posInvalida)
       : "<ul class='lista'>" +
         "<li>En Binance: elige <b>margen AISLADO</b> (no cruzado) y apalancamiento <b>" + lev + "x</b> ANTES de abrir.</li>" +
         "<li>Abre la posición y coloca el <b>SL y el TP inmediatamente</b> (orden TP/SL de cierre).</li>" +
         "<li>No muevas el stop loss. Máximo 2 posiciones abiertas a la vez.</li>" +
         "<li>Los precios cambian cada segundo: recalcula justo antes de entrar.</li>" +
         "</ul>");
+}
+
+// Checklist previo a operar. La app verifica sola lo que puede comprobar con datos;
+// el resto lo marcas tú. Si algo automático falla, no se opera y punto.
+function checklist(d, long, slProtege, posOk){
+  const auto = [];
+  const v = d.exp ? d.exp.veredicto : null;
+  auto.push({
+    ok: v === "pref" || v === "acep",
+    txt: "El estudio experto la aprueba",
+    det: !d.exp ? "No ha pasado por el estudio (no está entre las 10 primeras). Vas a ciegas."
+       : v === "pref" ? "Veredicto: Preferida (" + d.exp.pts + "/100)."
+       : v === "acep" ? "Veredicto: Aceptable (" + d.exp.pts + "/100)."
+       : "Veredicto: " + (v === "desc" ? "NO OPERAR" : "Riesgosa") + " (" + d.exp.pts + "/100). Este solo motivo basta para no entrar."
+  });
+  if (ctxBTC && d.symbol !== "BTCUSDT"){
+    const aFavor = long ? ctxBTC.alcista : ctxBTC.bajista;
+    auto.push({
+      ok: aFavor,
+      txt: "Bitcoin va en tu misma dirección",
+      det: aFavor ? "Bitcoin está " + (ctxBTC.alcista ? "subiendo" : "bajando") + " y tú vas al mismo lado."
+        : "Bitcoin está " + (ctxBTC.alcista ? "SUBIENDO" : "BAJANDO") + " y tú irías en " +
+          (long ? "LONG" : "SHORT") + ": remas contra el mercado entero."
+    });
+  }
+  auto.push({ ok: slProtege, txt: "El stop loss actúa antes que la liquidación",
+    det: slProtege ? "Con este apalancamiento, tu stop te cierra mucho antes de que te liquiden."
+                   : "A este apalancamiento te liquidarían ANTES del stop. Bájalo." });
+  auto.push({ ok: posOk, txt: "La posición cumple los mínimos de Binance",
+    det: posOk ? "Cantidad y precios con los decimales que Binance acepta." : "La posición es demasiado pequeña para Binance." });
+
+  const fallan = auto.filter(a => !a.ok).length;
+  const manual = [
+    "Elegí <b>margen AISLADO</b> y el apalancamiento que dice la ficha",
+    "Pulsé el botón correcto (<b>" + (long ? "largo/verde" : "corto/rojo") + "</b>), no el contrario",
+    "Puse el <b>Take Profit y el Stop Loss</b> con los valores exactos, y quedaron guardados",
+    "La barra de arriba dice <b>«✔ Niveles válidos»</b> justo ahora",
+    "Es mi <b>primera o segunda</b> posición abierta, no más",
+    "<b>No</b> llevo 3 pérdidas seguidas hoy"
+  ];
+
+  return "<div class='check'>" +
+    "<h4>✅ Checklist antes de entrar</h4>" +
+    "<div class='cauto'>" + auto.map(a =>
+      "<div class='ci " + (a.ok ? "si" : "no") + "'><span class='cm'>" + (a.ok ? "✔" : "✘") + "</span>" +
+      "<span><b>" + a.txt + "</b><br><span class='cd'>" + a.det + "</span></span></div>").join("") + "</div>" +
+    (fallan
+      ? "<div class='veredictoCheck mal'>🚫 " + (fallan > 1
+          ? fallan + " comprobaciones automáticas han fallado"
+          : "Ha fallado 1 comprobación automática") +
+        ". <b>Mi consejo es no abrir esta operación.</b></div>"
+      : "<div class='veredictoCheck bien'>✔ Las comprobaciones automáticas están en orden. Ahora marca tú las de abajo antes de dar a confirmar.</div>") +
+    "<div class='cman'>" + manual.map((m, i) =>
+      "<label><input type='checkbox' class='chkman' onchange='revisarCheck()'> " + m + "</label>").join("") + "</div>" +
+    "<div id='cierreCheck' class='veredictoCheck neutro'>Te faltan 6 casillas por marcar.</div>" +
+    "</div>";
+}
+function revisarCheck(){
+  const cajas = [].slice.call(document.querySelectorAll(".chkman"));
+  const faltan = cajas.filter(c => !c.checked).length;
+  const el = document.getElementById("cierreCheck");
+  if (!el) return;
+  if (faltan){
+    el.className = "veredictoCheck neutro";
+    el.textContent = "Te falta" + (faltan > 1 ? "n " + faltan + " casillas" : " 1 casilla") + " por marcar.";
+  } else {
+    el.className = "veredictoCheck bien";
+    el.innerHTML = "✔ Checklist completo. Ya puedes confirmar la orden en Binance con tranquilidad.";
+  }
 }
 
 // Ficha con TODOS los campos del formulario de Binance, en el orden en que se llenan.
@@ -997,6 +1137,12 @@ async function consultarMoneda(){
     };
     d.atrPct = d.atr / precio * 100;
     evaluar(d);
+    // Estudio experto de ESTA moneda, esté o no entre las 10 primeras: es lo que te
+    // permite preguntar por cualquier moneda y recibir un veredicto de verdad.
+    res.innerHTML = "<div class='planVacio' style='margin-top:12px'>Estudiando el mercado de " + d.nombre + "…</div>";
+    const hSup = await tendenciaDe(symbol, tfSuperior(tf));
+    if (!ctxBTC) ctxBTC = await tendenciaDe("BTCUSDT", tfSuperior(tf));
+    evaluarExperto(d, hSup, ctxBTC, tfSuperior(tf));
     ultimaConsulta = { d, tf };
     res.innerHTML = htmlConsulta(d, tf);
     arrancarVigilancia(d);
@@ -1022,7 +1168,7 @@ function htmlConsulta(d, tf){
     return cab +
       "<span class='senal " + d.senal + "'>" + (long ? "LONG (comprar)" : "SHORT (vender)") + "</span>" +
       "<span class='precio'>Puntuación " + d.score + "/100 · velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
-      vivo + banner(long) +
+      dictamen(d, long) + vivo + avisoExperto(d) + banner(long) +
       calcularFilasPlan(d, long, levConsulta(), true) + ayudaBinance();
   }
 
@@ -1032,6 +1178,8 @@ function htmlConsulta(d, tf){
   if (!alcista && !bajista){
     return cab + "<span class='senal ESPERAR'>ESPERAR</span>" +
       "<span class='precio'>velas de " + etiquetaTf(tf) + "</span></div>" +
+      "<div class='dictamen no'><span class='dt'>NO la operes ahora</span>" +
+      "<span class='dx'>Esta moneda no tiene una dirección definida: ni comprar ni vender tiene sentido en este momento.</span></div>" +
       vivo +
       "<div class='planVacio'>Mi asesoría ahora mismo es <b>no entrar</b> en esta moneda:</div>" + razonesHtml +
       "<div class='nota'>Sin tendencia definida no hay forma honesta de recomendarte LONG o SHORT: sería una moneda al aire. Consulta otra moneda o vuelve a intentarlo más tarde.</div>";
@@ -1040,6 +1188,9 @@ function htmlConsulta(d, tf){
   const long = alcista;
   return cab + "<span class='senal ESPERAR'>ESPERAR</span>" +
     "<span class='precio'>velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
+    "<div class='dictamen quiza'><span class='dt'>ESPERA — todavía no</span>" +
+    "<span class='dx'>La tendencia de fondo es " + (long ? "alcista" : "bajista") + ", pero no se cumplen los filtros para entrar. " +
+    "Abajo tienes el plan por si decides hacerlo igual, pero mi consejo es esperar.</span></div>" +
     vivo +
     "<div class='planVacio'>Mi asesoría ahora mismo es <b>esperar</b> con esta moneda:</div>" + razonesHtml +
     "<div class='nota alerta'>⚠️ Si aun así decides entrar, la tendencia de fondo es " +
