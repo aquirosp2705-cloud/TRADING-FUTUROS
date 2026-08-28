@@ -93,6 +93,11 @@
   .dictamen.si{border-color:var(--green); background:#0f1f17;} .dictamen.si .dt{color:var(--green);}
   .dictamen.quiza{border-color:var(--amber); background:#221a0c;} .dictamen.quiza .dt{color:var(--amber);}
   .dictamen.no{border-color:var(--red); background:#231114;} .dictamen.no .dt{color:var(--red);}
+  .gestion{margin:14px 0 4px; padding:14px 16px; background:#101a22; border:1.5px solid #2b6cb0; border-radius:10px;}
+  .gestion h4{font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:#63a4ff; margin-bottom:10px;}
+  .gestion .paso{display:flex; gap:10px; padding:8px 0; border-bottom:1px dashed #273147; font-size:13.5px; line-height:1.5;}
+  .gestion .paso:last-of-type{border-bottom:none;}
+  .gestion .pn{flex:0 0 21px; height:21px; line-height:21px; text-align:center; background:#2b6cb0; color:#fff; border-radius:50%; font-size:11.5px; font-weight:700;}
   .check{margin:14px 0 4px; padding:14px 16px; background:#101722; border:1.5px solid var(--border); border-radius:10px;}
   .check h4{font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--text); margin-bottom:10px;}
   .ci{display:flex; gap:10px; padding:7px 0; border-bottom:1px dashed #273147; font-size:13.5px;}
@@ -225,7 +230,7 @@
     <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th>Moneda</th><th>Precio</th><th>24 h</th><th>Gráfico</th><th>Tendencia</th><th>RSI</th><th>Volat.</th><th>Señal</th><th>Punt.</th><th>Veredicto experto</th>
+        <th>Moneda</th><th>Precio</th><th>24 h</th><th>Gráfico</th><th>Tendencia</th><th>RSI</th><th>Volat.</th><th>Señal</th><th>Solo técnica</th><th>NOTA DEL EXPERTO — esta es la que manda</th>
       </tr></thead>
       <tbody id="cuerpoTabla"><tr><td colspan="9" style="text-align:center; color:var(--muted); padding:24px">Sin datos todavía.</td></tr></tbody>
     </table>
@@ -253,6 +258,9 @@
     <p><b>La regla del 1%:</b> en cada operación solo arriesgas el 1% de tu capital ($5 si tienes $500). El tamaño de la posición se calcula al revés de como lo hace la mayoría: primero se fija cuánto estás dispuesta a perder, y de ahí sale cuántas monedas comprar. Con esta regla necesitarías ~100 pérdidas seguidas para quebrar la cuenta.</p>
     <p><b>Margen aislado:</b> es el dinero que "depositas" en esa operación concreta. Si sale muy mal, lo máximo que pierdes es ese margen — el resto de tu cuenta queda protegido. Por eso esta herramienta siempre asume margen aislado, nunca cruzado.</p>
     <p><b>Apalancamiento:</b> multiplica el tamaño de tu posición sin poner todo el dinero. El sugerido aquí se calcula para que el precio de <b>liquidación quede lejos</b> de tu stop loss: está diseñado para que el SL salte primero, con una pérdida pequeña. La liquidación que muestra la app es una estimación conservadora; Binance calcula la exacta al abrir la posición.</p>
+    <p><b>Qué esperar de verdad (léelo dos veces):</b> una nota alta <b>no es una probabilidad de ganar</b>. Aunque entres siempre con nota del experto por encima de 70, vas a perder en una buena parte de las operaciones — es normal y está previsto. Con objetivos 2:1 te basta acertar algo más de 1 de cada 3 veces para ir ganando, pero eso significa que <b>rachas de 3 o 4 pérdidas seguidas van a ocurrir</b>. Con la regla del 1%, cuatro pérdidas seguidas son unos $20 de $500: molesto, no grave. El error caro no es perder una operación; es entrar con el triple de dinero para «recuperar» lo perdido.</p>
+    <p><b>Si no puedes estar pendiente:</b> usa el bloque <b>🔔 Después de entrar</b> que aparece en cada plan. Pones una alerta de precio a mitad de camino del objetivo y, cuando salte, mueves el stop a tu precio de entrada. A partir de ahí esa operación ya no puede quitarte dinero: o gana, o sale en tablas. Es la forma profesional de dormir tranquila con una posición abierta.</p>
+    <p><b>Las dos notas no son lo mismo:</b> «Solo técnica» mira únicamente medias móviles y RSI de esa moneda. «Nota del experto» es la que manda: incluye Bitcoin, el volumen, si el mercado está picado y la temporalidad mayor. Una moneda puede tener 85 de técnica y 30 de experto — y entonces no se opera.</p>
     <p><b>La puntuación (0–100):</b> solo ordena qué señales cumplen los filtros con más holgura (tendencia más firme, RSI en zona sana, buena liquidez). <b>No es una probabilidad de ganar</b> — una señal de 85 puede fallar igual que una de 60.</p>
     <p><b>Reglas de oro:</b> máximo 2 operaciones abiertas a la vez · si pierdes 3 seguidas en el día, cierra la plataforma hasta mañana · nunca muevas el stop loss "para darle espacio" · el funding se paga o se cobra según su signo y tu dirección (normalmente cada 8 horas; en algunas monedas cada 4 o cada 1), revísalo si piensas mantener la posición días.</p>
   </div>
@@ -685,6 +693,14 @@ async function estudiarMercado(){
   pintarTabla(); // el veredicto experto ya está listo: se repinta para que la tabla no contradiga al estudio
   pintarEstudio(top, btc, htf);
 }
+// Hay dos notas y confundirlas es peligroso: la técnica solo mira las medias y el RSI;
+// la del experto ya incorpora Bitcoin, volumen y si el mercado está picado. Manda la 2ª.
+function notasDobles(d){
+  const tec = "Solo técnica: " + d.score + "/100";
+  if (!d.exp || d.senal === "ESPERAR") return tec;
+  return tec + " · <b>Nota del experto: " + d.exp.pts + "/100</b> ← esta es la que manda";
+}
+
 // Respuesta directa a «¿qué te parece esta moneda?»: lo primero que se ve, en grande.
 function dictamen(d, long){
   const v = d.exp ? d.exp.veredicto : null;
@@ -793,7 +809,7 @@ function mostrarPlan(symbol){
   cont.innerHTML =
     "<div class='planTitulo'><span class='par'>" + d.nombre + "</span>" +
     "<span class='senal " + d.senal + "'>" + (long ? "LONG (comprar)" : "SHORT (vender)") + "</span>" +
-    "<span class='precio'>Puntuación " + d.score + "/100 · velas de " + etiquetaTf(tfUsado) + "</span></div>" +
+    "<span class='precio'>" + notasDobles(d) + " · velas de " + etiquetaTf(tfUsado) + "</span></div>" +
     avisoExperto(d) +
     calcularFilasPlan(d, long, null);
 }
@@ -950,7 +966,9 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
       : "<div class='nota'>✔ Esta inversión respeta tu regla del " + riesgoPct + "%: si el stop salta, pierdes $" + perdidaTotal.toFixed(2) + " (" + (perdidaTotal/capital*100).toFixed(1) + "% de tu capital).</div>") : "") +
     (ajustado ? "<div class='nota alerta'>⚠️ El stop loss de esta moneda está muy cerca del precio, así que la posición completa usaría demasiado margen. Se redujo el tamaño para que el margen no pase del 25% de tu capital; por eso el riesgo real es menor al " + riesgoPct + "%.</div>" : "") +
     (gananciaPrimero
-      ? fichaOrden(d, long, lev, cantidad.toFixed(decQty), margen, sl, tp, dec) + checklist(d, long, slAntesDeLiq, !posInvalida)
+      ? fichaOrden(d, long, lev, cantidad.toFixed(decQty), margen, sl, tp, dec) +
+        checklist(d, long, slAntesDeLiq, !posInvalida) +
+        gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, fl.tick)
       : "<ul class='lista'>" +
         "<li>En Binance: elige <b>margen AISLADO</b> (no cruzado) y apalancamiento <b>" + lev + "x</b> ANTES de abrir.</li>" +
         "<li>Abre la posición y coloca el <b>SL y el TP inmediatamente</b> (orden TP/SL de cierre).</li>" +
@@ -1026,6 +1044,33 @@ function revisarCheck(){
     el.className = "veredictoCheck bien";
     el.innerHTML = "✔ Checklist completo. Ya puedes confirmar la orden en Binance con tranquilidad.";
   }
+}
+
+// Qué hacer DESPUÉS de entrar. Resuelve el problema real: no poder estar pendiente.
+// En cuanto el precio recorre la mitad del camino al objetivo, se mueve el stop al
+// punto de equilibrio y la operación deja de poder quitarte dinero.
+function gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, tick){
+  const distReal = Math.abs(entrada - sl);
+  const n1R = long ? entrada + distReal : entrada - distReal;
+  const nivel1R = aPaso(n1R, tick, long ? "floor" : "ceil");
+  // Para salir en tablas hay que cubrir las comisiones de entrada y salida.
+  const colchonFees = cantidad ? comision / cantidad : 0;
+  const equilibrio = aPaso(long ? entrada + colchonFees : entrada - colchonFees, tick, long ? "ceil" : "floor");
+
+  return "<div class='gestion'>" +
+    "<h4>🔔 Después de entrar — para no tener que estar pendiente</h4>" +
+    "<div class='paso'><span class='pn'>1</span><span>Nada más abrir, pon una <b>alerta de precio</b> en Binance en <b class='" +
+      (long ? "up" : "down") + "'>" + fmtPrecio(nivel1R, dec) + "</b> (la mitad del camino a tu objetivo). " +
+      "Así el móvil te avisa y no tienes que mirar el gráfico.</span></div>" +
+    "<div class='paso'><span class='pn'>2</span><span>Cuando salte esa alerta, <b>mueve tu Stop Loss</b> desde " + fmtPrecio(sl, dec) +
+      " hasta <b>" + fmtPrecio(equilibrio, dec) + "</b> (tu precio de entrada más las comisiones). " +
+      "Desde ese momento, <b>esa operación ya no puede quitarte dinero</b>: si el precio se da la vuelta, sales en tablas.</span></div>" +
+    "<div class='paso'><span class='pn'>3</span><span>Deja correr el resto hasta el Take Profit de " + fmtPrecio(tp, dec) +
+      ". Si prefieres asegurar, cierra <b>la mitad</b> de la posición en la alerta del paso 1 y deja la otra mitad con el stop ya en equilibrio.</span></div>" +
+    "<div class='nota' style='margin-top:10px'>Esto es lo que convierte una racha normal de pérdidas en algo soportable: " +
+      "las operaciones que se dan la vuelta a mitad de camino salen en $0 en vez de −$" + (cantidad * distReal).toFixed(2) + ". " +
+      "<b>No muevas el stop en la dirección contraria</b> (nunca lo alejes para «darle una oportunidad»): eso es lo que convierte una pérdida pequeña en una grande.</div>" +
+    "</div>";
 }
 
 // Ficha con TODOS los campos del formulario de Binance, en el orden en que se llenan.
@@ -1180,7 +1225,7 @@ function htmlConsulta(d, tf){
     const long = d.senal === "LONG";
     return cab +
       "<span class='senal " + d.senal + "'>" + (long ? "LONG (comprar)" : "SHORT (vender)") + "</span>" +
-      "<span class='precio'>Puntuación " + d.score + "/100 · velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
+      "<span class='precio'>" + notasDobles(d) + " · velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
       dictamen(d, long) + vivo + avisoExperto(d) + banner(long) +
       calcularFilasPlan(d, long, levConsulta(), true) + ayudaBinance();
   }
