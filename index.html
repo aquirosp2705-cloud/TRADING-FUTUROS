@@ -461,6 +461,8 @@ async function analizar(){
           volRatio: media(vols.slice(-10)) / (media(vols.slice(-100)) || 1),
           efic: eficiencia(cierres, 20),
           minRec: Math.min.apply(null, bajos.slice(-20)),
+          techo: Math.max.apply(null, altos.slice(-100)),
+          suelo: Math.min.apply(null, bajos.slice(-100)),
           maxRec: Math.max.apply(null, altos.slice(-20)),
           cierres: cierres.slice(-60)
         };
@@ -593,7 +595,7 @@ function evaluarExperto(d, h, btc, htf){
     const notas = [];
     // El filtro técnico aporta como mucho 25 puntos; el resto lo da el estudio experto,
     // para que la nota distinga de verdad entre candidatas parecidas.
-    let pts = d.score * 0.25;
+    let pts = d.score * 0.20;
 
     if (h){
       if (long ? h.alcista : h.bajista){
@@ -623,6 +625,30 @@ function evaluarExperto(d, h, btc, htf){
       notas.push("✘ Mercado picado (eficiencia " + (d.efic*100).toFixed(0) + "%): sube y baja dando tumbos. Aquí el stop salta por puro ruido aunque la dirección sea la correcta — es la forma más frecuente de perder teniendo razón.");
     } else {
       notas.push("• Tendencia irregular (eficiencia " + (d.efic*100).toFixed(0) + "%): avanza, pero con vaivenes.");
+    }
+
+    // ¿Está despejado el camino hasta el objetivo? Si entre el precio y el take profit
+    // hay un techo (o un suelo) que el mercado ya respetó, lo normal es que el precio
+    // se frene ahí, se dé la vuelta y termine barriendo el stop. Es de los motivos más
+    // frecuentes de perder una operación que técnicamente estaba bien elegida.
+    const rrObj = parseFloat(document.getElementById("rr").value) || 2;
+    const paso1R = ATR_MULT * d.atr;
+    if (paso1R > 0){
+      const muro = long ? d.techo : d.suelo;
+      const margenR = long ? (muro - d.precio) / paso1R : (d.precio - muro) / paso1R;
+      if (margenR <= 0){
+        pts += 12;
+        notas.push("✔ Camino despejado: el precio ya está por " + (long ? "encima del techo" : "debajo del suelo") +
+          " de las últimas 100 velas, así que no tiene nada por delante que lo frene.");
+      } else if (margenR >= rrObj){
+        pts += 10;
+        notas.push("✔ Camino despejado hasta el objetivo: el " + (long ? "techo" : "suelo") + " del rango reciente está en " +
+          muro.toFixed(d.decimales) + ", más allá de donde quieres salir.");
+      } else {
+        pts -= 18;
+        notas.push("✘ Hay un " + (long ? "techo" : "suelo") + " en " + muro.toFixed(d.decimales) +
+          ", justo en medio del camino a tu objetivo. El precio suele frenarse ahí y darse la vuelta: es una de las causas más frecuentes de que salte el stop en una operación bien elegida.");
+      }
     }
 
     const distE = d.atr ? Math.abs(d.precio - d.e20) / d.atr : 0;
@@ -919,6 +945,11 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
   const filaGananciaTop = "<div class='fila destacada'><span class='k'>💵 Posible ganancia si toca el TP (con comisiones)</span><span class='v'><span class='up'>+$" + gananciaNeta.toFixed(2) + "</span></span></div>";
   const filaLiq      = fila("Liquidación (estimación prudente)", fmtPrecio(liq, dec) + " · SL protege " + (slAntesDeLiq ? "<span class='ok'>✔</span>" : "<span class='mal'>✘ NO OPERAR</span>"));
   const filaCom      = fila("Comisiones estimadas", "~$" + comision.toFixed(2));
+  const muro = long ? d.techo : d.suelo;
+  const filaMuro = muro ? fila((long ? "Techo" : "Suelo") + " del rango reciente",
+    fmtPrecio(muro, dec) + " · " + ((long ? muro <= tp : muro >= tp)
+      ? "<span class='mal'>⚠ está antes de tu objetivo</span>"
+      : "<span class='ok'>✔ camino despejado</span>")) : "";
   const filaFund     = d.funding !== undefined ? fila("Funding (cada " + d.fundingHoras + " h)", (d.funding*100).toFixed(4) + "% · " + descFunding(d.funding, long)) : "";
 
   // Las tres cifras que de verdad importan, bien grandes y antes que nada.
@@ -931,8 +962,8 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
       "<span class='rs'>si toca el Stop Loss</span></div></div>";
 
   const filas = gananciaPrimero
-    ? filaGananciaTop + filaPerdida + filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaLiq + filaCom + filaFund
-    : filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaPerdida + filaGanancia + filaLiq + filaCom + filaFund;
+    ? filaGananciaTop + filaPerdida + filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaMuro + filaLiq + filaCom + filaFund
+    : filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaPerdida + filaGanancia + filaMuro + filaLiq + filaCom + filaFund;
 
   if (gananciaPrimero) nivelesPlan = posInvalida ? null : { long, sl, tp, cantidad: cantidad.toFixed(decQty), lev, margen: margen.toFixed(2), dec };
 
@@ -1061,7 +1092,16 @@ function gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, tick
     "<h4>🔔 Después de entrar — para no tener que estar pendiente</h4>" +
     "<div class='paso'><span class='pn'>1</span><span>Nada más abrir, pon una <b>alerta de precio</b> en Binance en <b class='" +
       (long ? "up" : "down") + "'>" + fmtPrecio(nivel1R, dec) + "</b> (la mitad del camino a tu objetivo). " +
-      "Así el móvil te avisa y no tienes que mirar el gráfico.</span></div>" +
+      "Así el móvil te avisa y no tienes que mirar el gráfico." +
+      "<details style='margin-top:6px'><summary style='cursor:pointer; color:#63a4ff; font-size:12.5px'>¿Cómo se pone la alerta en Binance?</summary>" +
+      "<div style='font-size:12.5px; color:#c4cede; margin-top:6px; line-height:1.55'>" +
+      "<b>En el móvil (lo más cómodo):</b> abre el gráfico de " + d.nombre + "USDT → toca el icono de la <b>campana 🔔</b> arriba a la derecha → " +
+      "«Añadir alerta» → elige <b>Precio</b> → «Sube hasta / Baja hasta» según toque → escribe <b>" + fmtPrecio(nivel1R, dec) + "</b> → Confirmar. " +
+      "Necesitas tener activadas las notificaciones de la app de Binance en tu teléfono." +
+      "<br><br><b>En la computadora:</b> en el gráfico de " + d.nombre + "USDT busca el icono de la campana (o clic derecho sobre el precio → «Añadir alerta»), " +
+      "pon <b>" + fmtPrecio(nivel1R, dec) + "</b> y guarda. Te llega al correo y al móvil." +
+      "<br><br><b>Truco si no encuentras la campana:</b> puedes lograr lo mismo con una <b>orden límite de cierre parcial</b> de la mitad de tu posición en " +
+      fmtPrecio(nivel1R, dec) + " marcando «Reduce only». Si se ejecuta, ya aseguraste ganancia y te enteras igual.</div></details></span></div>" +
     "<div class='paso'><span class='pn'>2</span><span>Cuando salte esa alerta, <b>mueve tu Stop Loss</b> desde " + fmtPrecio(sl, dec) +
       " hasta <b>" + fmtPrecio(equilibrio, dec) + "</b> (tu precio de entrada más las comisiones). " +
       "Desde ese momento, <b>esa operación ya no puede quitarte dinero</b>: si el precio se da la vuelta, sales en tablas.</span></div>" +
@@ -1190,6 +1230,8 @@ async function consultarMoneda(){
       volRatio: media10(velas) ,
       efic: eficiencia(cierres, 20),
       minRec: Math.min.apply(null, bajos.slice(-20)),
+      techo: Math.max.apply(null, altos.slice(-100)),
+      suelo: Math.min.apply(null, bajos.slice(-100)),
       maxRec: Math.max.apply(null, altos.slice(-20)),
       cierres: cierres.slice(-60)
     };
