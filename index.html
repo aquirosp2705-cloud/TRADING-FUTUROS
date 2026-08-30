@@ -1139,17 +1139,29 @@ function gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, tick
     return "<div class='gestion'>" +
       "<h4>🤖 Después de entrar — todo automático, no tienes que mirar nada</h4>" +
       "<div class='paso'><span class='pn'>1</span><span>Con la posición ya abierta y su Stop Loss puesto, abre <b>una orden más</b> del " +
-        "tipo <b>Trailing Stop</b> (Stop de seguimiento), por la <b>cantidad completa</b> de tu posición y marcando <b>«Reduce only»</b>.</span></div>" +
+        "tipo <b>Trailing Stop</b> (Binance NO lo traduce: búscalo en inglés dentro de la lista de tipos de orden), por la <b>cantidad completa</b> de tu posición y marcando <b>«Solo reducir» / «Reduce only»</b>.</span></div>" +
       "<div class='paso'><span class='pn'>2</span><span>Rellena solo dos campos:<br>" +
         "· <b>Precio de activación</b>: <b class='" + (long ? "up" : "down") + "'>" + fmtPrecio(nivel1R, dec) + "</b><br>" +
-        "· <b>Retroceso (callback rate)</b>: <b>" + callback.toFixed(1) + "%</b></span></div>" +
+        "· <b>Tasa de callback</b>: <b>" + callback.toFixed(1) + "%</b> <span class='et' style='color:var(--muted)'>(Binance admite de 0.1% a 10%)</span></span></div>" +
       "<div class='paso'><span class='pn'>3</span><span>Ya está. A partir de ahí <b>Binance mueve el stop por ti</b>: si el precio avanza a tu favor, el stop lo sigue; " +
         "si retrocede " + callback.toFixed(1) + "%, cierra solo y te quedas con lo ganado. <b>No tienes que mirar el teléfono ni una vez.</b></span></div>" +
       "<div class='nota' style='margin-top:10px'>Deja también puesto tu Stop Loss de " + fmtPrecio(sl, dec) +
         " y tu Take Profit de " + fmtPrecio(tp, dec) + ": entre los tres, la operación se cierra sola pase lo que pase. " +
         "<b>Nunca dejes una posición abierta sin stop</b>, y menos si no vas a poder mirarla.</div>" +
-      "<div class='nota alerta'>Si tu Binance no ofrece Trailing Stop en este par, la alternativa sin vigilancia es: deja SL y TP puestos y " +
-        "<b>no toques nada</b>. Ganarás menos veces, pero nunca perderás más de lo previsto.</div>" +
+      "<details style='margin-top:10px'><summary style='cursor:pointer; color:#63a4ff; font-size:13px'>🔎 No encuentro «Trailing Stop» en mi Binance</summary>" +
+      "<div style='font-size:13px; color:#c4cede; margin-top:8px; line-height:1.6'>" +
+      "<b>1. Está en INGLÉS.</b> Binance no traduce este nombre: aunque toda tu pantalla esté en español, la orden se llama <b>«Trailing Stop»</b>. " +
+      "No existe como «Stop de seguimiento» ni «Stop dinámico» — si buscas eso, no la vas a encontrar nunca." +
+      "<br><br><b>2. ¿Estás en Binance Lite?</b> La versión Lite <b>no tiene Futuros</b>, así que tampoco esta orden. " +
+      "Cámbiate: icono de tu perfil (arriba a la izquierda) → <b>[Binance Pro]</b>." +
+      "<br><br><b>3. ¿Estás en «Modo de trading: Fácil»?</b> En ese modo Binance solo permite órdenes simples y esconde la lista de tipos. " +
+      "Cámbialo: <b>[Futuros]</b> → icono <b>[...]</b> arriba a la derecha → <b>[Modo de trading]</b> → <b>[Clásico]</b>." +
+      "<br><br><b>4. Está dentro del desplegable de tipos de orden.</b> En el panel donde ves las pestañas [Limit] y [Market], despliega la lista completa: " +
+      "hay 11 tipos y <b>Trailing Stop es el quinto</b>, después de Limit, Market, Stop Limit y Stop Market." +
+      "<br><br><b>5. Después de crearla no la busques entre las órdenes normales:</b> aparece en <b>[Órdenes abiertas]</b>, bajo el filtro de órdenes " +
+      "condicionales o de activación. Mucha gente cree que no se creó solo por eso.</div></details>" +
+      "<div class='nota alerta'>Si aun así no la encuentras, la alternativa sin vigilancia es la más simple: deja el <b>Stop Loss y el Take Profit puestos y no toques nada</b>. " +
+      "Ganarás algo menos, pero nunca perderás más de lo previsto y tampoco tendrás que mirar el teléfono.</div>" +
       "</div>";
   }
 
