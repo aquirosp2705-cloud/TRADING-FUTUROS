@@ -186,6 +186,12 @@
       <option value="4h">4 horas</option>
     </select>
   </div>
+  <div class="campo"><label>¿Puedes vigilar la operación?</label>
+    <select id="modoOperar" style="width:250px">
+      <option value="desatendida" selected>NO puedo estar pendiente (desatendida)</option>
+      <option value="vigilada">Sí, puedo seguirla de cerca</option>
+    </select>
+  </div>
   <div class="campo"><label>Mercado</label>
     <select id="mercado">
       <option value="cripto" selected>Solo criptomonedas</option>
@@ -289,6 +295,10 @@ let tfUsado = "1h";      // temporalidad con la que se calculó el último anál
 let fundingHorasMap = {}; // intervalos de funding distintos al estándar de 8 h
 let filtros = {};         // por símbolo: tick de precio, paso de cantidad y mínimo de posición
 let ctxBTC = null;        // tendencia de Bitcoin del último estudio, para el checklist
+// Operar sin poder vigilar la posición exige mucho más de la moneda: tendencia limpia,
+// volatilidad contenida y un stop que aguante el vaivén de varias horas sin mirar.
+function desatendida(){ return document.getElementById("modoOperar").value === "desatendida"; }
+const EXIG_DESATENDIDA = { efic: 0.30, atrMax: 2.0, notaMin: 68 };
 // Apalancamiento elegido por la usuaria en la asesoría (3x por defecto).
 function levConsulta(){
   return parseInt(document.getElementById("levConsulta").value) || 3;
@@ -302,6 +312,7 @@ document.getElementById("auto").addEventListener("change", e => {
   document.getElementById(id).addEventListener("change", () => { if (seleccion) mostrarPlan(seleccion); })
 );
 document.getElementById("mercado").addEventListener("change", () => { if (datos.length) analizar(); });
+document.getElementById("modoOperar").addEventListener("change", () => { if (datos.length) analizar(); });
 document.getElementById("tf").addEventListener("change", () => { if (datos.length) analizar(); });
 
 function estado(msg, esError){
@@ -624,7 +635,21 @@ function evaluarExperto(d, h, btc, htf){
       pts -= 22;
       notas.push("✘ Mercado picado (eficiencia " + (d.efic*100).toFixed(0) + "%): sube y baja dando tumbos. Aquí el stop salta por puro ruido aunque la dirección sea la correcta — es la forma más frecuente de perder teniendo razón.");
     } else {
-      notas.push("• Tendencia irregular (eficiencia " + (d.efic*100).toFixed(0) + "%): avanza, pero con vaivenes.");
+      pts -= 8;
+      notas.push("• Tendencia irregular (eficiencia " + (d.efic*100).toFixed(0) + "%): avanza, pero con vaivenes que pueden alcanzar tu stop.");
+    }
+
+    // Calidad del instrumento. Una moneda que se mueve un 3% cada hora no es una
+    // oportunidad: es un billete de lotería. Da igual lo bien que pinte el gráfico.
+    if (d.atrPct > 2.5){
+      pts -= 16;
+      notas.push("✘ Moneda demasiado nerviosa (se mueve " + d.atrPct.toFixed(1) + "% por vela): con esta volatilidad el precio alcanza tu stop por simple vaivén, y si no puedes vigilarla se vuelve una apuesta.");
+    } else if (d.atrPct > 1.6){
+      pts -= 6;
+      notas.push("• Volatilidad alta (" + d.atrPct.toFixed(1) + "% por vela): exige más atención de lo normal.");
+    } else if (d.atrPct >= 0.7){
+      pts += 8;
+      notas.push("✔ Volatilidad en su punto (" + d.atrPct.toFixed(1) + "% por vela): se mueve lo suficiente para llegar al objetivo sin ser una montaña rusa.");
     }
 
     // ¿Está despejado el camino hasta el objetivo? Si entre el precio y el take profit
@@ -682,7 +707,22 @@ function evaluarExperto(d, h, btc, htf){
     }
 
     pts = Math.max(0, Math.min(100, Math.round(pts)));
-    d.exp = { pts, notas, veredicto: pts >= 68 ? "pref" : pts >= 50 ? "acep" : pts >= 32 ? "ries" : "desc" };
+    let veredicto = pts >= 68 ? "pref" : pts >= 50 ? "acep" : pts >= 32 ? "ries" : "desc";
+
+    // Si no vas a poder vigilar la posición, hay condiciones que no se negocian: una
+    // moneda nerviosa o de tendencia sucia te alcanza el stop mientras trabajas.
+    let vetos = [];
+    if (desatendida()){
+      if (d.efic < EXIG_DESATENDIDA.efic)
+        vetos.push("su tendencia no es lo bastante limpia (eficiencia " + (d.efic*100).toFixed(0) + "%, hace falta " + (EXIG_DESATENDIDA.efic*100) + "%)");
+      if (d.atrPct > EXIG_DESATENDIDA.atrMax)
+        vetos.push("se mueve demasiado (" + d.atrPct.toFixed(1) + "% por vela, el máximo prudente sin vigilar es " + EXIG_DESATENDIDA.atrMax + "%)");
+      if (vetos.length){
+        veredicto = "desc";
+        notas.unshift("🚫 <b>No apta para dejarla sola:</b> " + vetos.join(" y ") + ". Sin poder mirarla, esto no es operar: es apostar.");
+      }
+    }
+    d.exp = { pts, notas, veredicto, vetos, desat: desatendida() };
 }
 
 // Se estudian las mejores de CADA dirección, no solo las de mayor nota técnica. Si no,
@@ -742,9 +782,13 @@ function dictamen(d, long){
   } else if (v === "ries"){
     clase = "quiza"; titulo = "MEJOR NO — es riesgosa";
     texto = "La señal apunta a " + dir + ", pero el estudio la castiga (" + pts + "/100) por los motivos de abajo. Yo esperaría.";
+  } else if (d.exp && d.exp.vetos && d.exp.vetos.length){
+    clase = "no"; titulo = "NO — no es apta para dejarla sola";
+    texto = "La señal apunta a " + dir + ", pero " + d.exp.vetos.join(" y ") +
+      ". Como no vas a poder vigilarla, el vaivén normal te alcanzaría el stop mientras trabajas. Busca otra moneda más tranquila.";
   } else {
     clase = "no"; titulo = "NO la operes";
-    texto = "La señal apunta a " + dir + ", pero el estudio la descarta (" + pts + "/100). Entrar aquí es ir contra el mercado.";
+    texto = "La señal apunta a " + dir + ", pero el estudio la descarta (" + pts + "/100) por los motivos de abajo.";
   }
   return "<div class='dictamen " + clase + "'><span class='dt'>" + titulo + "</span><span class='dx'>" + texto + "</span></div>";
 }
@@ -755,7 +799,7 @@ function avisoExperto(d){
   if (!d || !d.exp || d.senal === "ESPERAR") return "";
   const v = d.exp.veredicto;
   if (v !== "desc" && v !== "ries") return "";
-  const contras = d.exp.notas.filter(n => n.startsWith("✘"));
+  const contras = d.exp.notas.filter(n => n.startsWith("✘") || n.startsWith("🚫"));
   const dur = v === "desc";
   return "<div class='nota alerta' style='border-color:" + (dur ? "var(--red)" : "var(--amber)") +
     "; background:" + (dur ? "#2a1214" : "#2a1f10") + "; color:" + (dur ? "#ffb3b6" : "#e8c877") + "; font-size:14px'>" +
@@ -1087,6 +1131,27 @@ function gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, tick
   // Para salir en tablas hay que cubrir las comisiones de entrada y salida.
   const colchonFees = cantidad ? comision / cantidad : 0;
   const equilibrio = aPaso(long ? entrada + colchonFees : entrada - colchonFees, tick, long ? "ceil" : "floor");
+
+  // Si no puede vigilar, el stop lo tiene que mover el propio Binance: Trailing Stop.
+  if (desatendida()){
+    const distPctSL = distReal / entrada * 100;
+    const callback = Math.min(10, Math.max(0.5, Math.round(distPctSL * 10) / 10));
+    return "<div class='gestion'>" +
+      "<h4>🤖 Después de entrar — todo automático, no tienes que mirar nada</h4>" +
+      "<div class='paso'><span class='pn'>1</span><span>Con la posición ya abierta y su Stop Loss puesto, abre <b>una orden más</b> del " +
+        "tipo <b>Trailing Stop</b> (Stop de seguimiento), por la <b>cantidad completa</b> de tu posición y marcando <b>«Reduce only»</b>.</span></div>" +
+      "<div class='paso'><span class='pn'>2</span><span>Rellena solo dos campos:<br>" +
+        "· <b>Precio de activación</b>: <b class='" + (long ? "up" : "down") + "'>" + fmtPrecio(nivel1R, dec) + "</b><br>" +
+        "· <b>Retroceso (callback rate)</b>: <b>" + callback.toFixed(1) + "%</b></span></div>" +
+      "<div class='paso'><span class='pn'>3</span><span>Ya está. A partir de ahí <b>Binance mueve el stop por ti</b>: si el precio avanza a tu favor, el stop lo sigue; " +
+        "si retrocede " + callback.toFixed(1) + "%, cierra solo y te quedas con lo ganado. <b>No tienes que mirar el teléfono ni una vez.</b></span></div>" +
+      "<div class='nota' style='margin-top:10px'>Deja también puesto tu Stop Loss de " + fmtPrecio(sl, dec) +
+        " y tu Take Profit de " + fmtPrecio(tp, dec) + ": entre los tres, la operación se cierra sola pase lo que pase. " +
+        "<b>Nunca dejes una posición abierta sin stop</b>, y menos si no vas a poder mirarla.</div>" +
+      "<div class='nota alerta'>Si tu Binance no ofrece Trailing Stop en este par, la alternativa sin vigilancia es: deja SL y TP puestos y " +
+        "<b>no toques nada</b>. Ganarás menos veces, pero nunca perderás más de lo previsto.</div>" +
+      "</div>";
+  }
 
   return "<div class='gestion'>" +
     "<h4>🔔 Después de entrar — para no tener que estar pendiente</h4>" +
