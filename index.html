@@ -90,8 +90,8 @@
   .ia-sug button:hover{background:#2c3d5e; color:#fff;}
   #consulta{margin:0 22px 16px;}
   #monedaConsulta{text-transform:uppercase;}
-  #btnConsultar, #btnIA, #btnGuardarClave, #btnCopiar{background:var(--green); border:none; color:#fff; font-weight:700; font-size:14.5px; padding:10px 20px; border-radius:8px; cursor:pointer;}
-  #btnConsultar:hover, #btnIA:hover, #btnGuardarClave:hover{filter:brightness(1.1);}
+  #btnConsultar, #btnIA, #btnGuardarClave, #btnCopiar, #btnCalc{background:var(--green); border:none; color:#fff; font-weight:700; font-size:14.5px; padding:10px 20px; border-radius:8px; cursor:pointer;}
+  #btnConsultar:hover, #btnIA:hover, #btnGuardarClave:hover, #btnCalc:hover{filter:brightness(1.1);}
   #btnConsultar:disabled, #btnIA:disabled{opacity:.5; cursor:wait;}
   .pista{color:var(--muted); font-size:13px;}
   .vivo{margin:10px 0 4px; padding:9px 13px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; font-size:13.5px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
@@ -173,6 +173,7 @@
 <nav class="tabs">
   <button class="activa" onclick="verPestana('operar', this)">🎯 Operar</button>
   <button onclick="verPestana('mercado', this)">📊 Mercado</button>
+  <button onclick="verPestana('calc', this)">🧮 Calculadora</button>
   <button onclick="verPestana('ia', this)">🤖 Asistente</button>
   <button onclick="verPestana('ajustes', this)">⚙️ Ajustes</button>
   <button onclick="verPestana('guia', this)">📘 Guía</button>
@@ -240,6 +241,32 @@
       </div>
     </div>
   </main>
+</section>
+
+<!-- ══════════════ CALCULADORA ══════════════ -->
+<section class="panel oculto" id="p-calc">
+  <div class="cajaOp">
+    <h2>🧮 ¿Cuánto gano o pierdo con esta operación?</h2>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end">
+      <div class="campo"><label>Moneda</label><input id="cMoneda" placeholder="BTC" maxlength="20" style="width:120px; text-transform:uppercase"></div>
+      <div class="campo"><label>Precio de entrada</label><input type="number" id="cEntrada" placeholder="—" step="any" style="width:150px"></div>
+      <div class="campo"><label>Dinero que pongo (US$)</label><input type="number" id="cDinero" value="150" min="1" step="5" style="width:160px"></div>
+      <div class="campo"><label>Apalancamiento</label>
+        <select id="cLev" style="width:110px">
+          <option value="1">1x</option><option value="2">2x</option><option value="3">3x</option>
+          <option value="5" selected>5x</option><option value="10">10x</option><option value="15">15x</option>
+          <option value="20">20x</option><option value="25">25x</option><option value="50">50x</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:14px">
+      <div class="campo"><label>🎯 Take Profit</label><input type="number" id="cTP" placeholder="—" step="any" style="width:150px"></div>
+      <div class="campo"><label>🛑 Stop Loss</label><input type="number" id="cSL" placeholder="—" step="any" style="width:150px"></div>
+      <button id="btnCalc" onclick="calcular()">Calcular</button>
+    </div>
+    <div class="pista" style="margin-top:9px">Escribe la moneda y te traigo su precio actual. Puedes cambiarlo si ya estás dentro y tu entrada fue otra.</div>
+    <div id="cResultado"></div>
+  </div>
 </section>
 
 <!-- ══════════════ ASISTENTE IA ══════════════ -->
@@ -1022,9 +1049,111 @@ async function preguntarIA(){
   }
 }
 
+// ---------- Calculadora de ganancia y pérdida ----------
+// Solo responde a una pregunta: cuánto gano si toca el TP y cuánto pierdo si toca el SL.
+document.getElementById("cMoneda").addEventListener("change", traerPrecioCalc);
+document.getElementById("cMoneda").addEventListener("keydown", e => { if (e.key === "Enter") traerPrecioCalc(); });
+
+async function traerPrecioCalc(){
+  let n = document.getElementById("cMoneda").value.trim().toUpperCase().replace(/\s+/g, "");
+  if (!n) return;
+  if (n.endsWith("USDT")) n = n.slice(0, -4);
+  let symbol = n + "USDT";
+  try {
+    if (!mapaSimbolos) await cargarSimbolos();
+    if (!mapaSimbolos[symbol] && mapaSimbolos["1000" + symbol]) symbol = "1000" + symbol;
+    if (!mapaSimbolos[symbol]){
+      document.getElementById("cResultado").innerHTML = "<div class='nota alerta' style='margin-top:12px'>No encuentro «" + n + "» en Binance. Revisa cómo se escribe.</div>";
+      return;
+    }
+    const r = await fetch(API + "/fapi/v1/ticker/price?symbol=" + symbol);
+    if (!r.ok) return;
+    const precio = parseFloat((await r.json()).price);
+    document.getElementById("cMoneda").value = symbol.replace("USDT", "");
+    document.getElementById("cEntrada").value = precio;
+    document.getElementById("cResultado").innerHTML = "";
+  } catch (e){ /* sin conexión: la usuaria puede escribir el precio a mano */ }
+}
+
+function calcular(){
+  const cont = document.getElementById("cResultado");
+  const nom = document.getElementById("cMoneda").value.trim().toUpperCase() || "la moneda";
+  const entrada = parseFloat(document.getElementById("cEntrada").value);
+  const dinero  = parseFloat(document.getElementById("cDinero").value);
+  const lev     = parseInt(document.getElementById("cLev").value);
+  const tp      = parseFloat(document.getElementById("cTP").value);
+  const sl      = parseFloat(document.getElementById("cSL").value);
+  const err = m => cont.innerHTML = "<div class='nota alerta' style='margin-top:14px'>" + m + "</div>";
+
+  if (!(entrada > 0)) return err("Falta el precio de entrada. Escribe la moneda y te lo traigo, o ponlo a mano.");
+  if (!(dinero > 0))  return err("Falta el dinero que vas a poner.");
+  if (!(tp > 0) && !(sl > 0)) return err("Pon al menos un Take Profit o un Stop Loss.");
+
+  // La dirección se deduce sola: si el objetivo está arriba es compra, si está abajo, venta.
+  const long = tp > 0 ? tp > entrada : sl < entrada;
+  if (tp > 0 && sl > 0){
+    if (long && !(tp > entrada && sl < entrada))
+      return err("En una compra el Take Profit va ARRIBA del precio de entrada y el Stop Loss ABAJO. Revisa los dos niveles.");
+    if (!long && !(tp < entrada && sl > entrada))
+      return err("En una venta el Take Profit va ABAJO del precio de entrada y el Stop Loss ARRIBA. Revisa los dos niveles.");
+  }
+
+  const fl = filtros[nom + "USDT"] || {};
+  const dec = fl.tick ? decimalesDe(fl.tick) : (String(entrada).split(".")[1] || "").length;
+  let cantidad = (dinero * lev) / entrada;
+  // Aquí se redondea al múltiplo MÁS CERCANO (no hacia abajo): si pones $31.60 esperando
+  // 0.002 BTC, unos céntimos de diferencia no deben dejarte con la mitad de posición.
+  if (fl.paso) cantidad = aPaso(cantidad, fl.paso, "round");
+  const decQty = fl.paso ? decimalesDe(fl.paso) : 4;
+  if (!(cantidad > 0))
+    return err("Con $" + dinero.toFixed(2) + " a " + lev + "x no llegas a la cantidad mínima que negocia " + nom + ". Sube el dinero o el apalancamiento.");
+
+  const nocional = cantidad * entrada;
+  const fee = p => cantidad * p * TAKER_FEE;
+
+  let filas = "";
+  let gananciaNeta = null, perdidaTotal = null;
+  if (tp > 0){
+    gananciaNeta = cantidad * Math.abs(tp - entrada) - fee(entrada) - fee(tp);
+    filas += "<div class='rcel gan'><span class='rt'>Si toca el Take Profit</span>" +
+      "<span class='rv up'>+$" + gananciaNeta.toFixed(2) + "</span>" +
+      "<span class='rs'>" + fmtPrecio(tp, dec) + " · " + (long ? "+" : "−") + (Math.abs(tp-entrada)/entrada*100).toFixed(2) + "%</span></div>";
+  }
+  if (sl > 0){
+    perdidaTotal = cantidad * Math.abs(entrada - sl) + fee(entrada) + fee(sl);
+    filas += "<div class='rcel per'><span class='rt'>Si toca el Stop Loss</span>" +
+      "<span class='rv down'>−$" + perdidaTotal.toFixed(2) + "</span>" +
+      "<span class='rs'>" + fmtPrecio(sl, dec) + " · " + (long ? "−" : "+") + (Math.abs(entrada-sl)/entrada*100).toFixed(2) + "%</span></div>";
+  }
+
+  const rel = (gananciaNeta !== null && perdidaTotal > 0) ? gananciaNeta / perdidaTotal : null;
+  let notas = "<div class='nota' style='margin-top:12px'><b>" + (long ? "Compra (LONG)" : "Venta (SHORT)") + "</b> de <b>" +
+    cantidad.toFixed(decQty) + " " + nom + "</b> · cada punto que se mueva " + nom + " son $" + cantidad.toFixed(decQty) +
+    " para ti · comisiones ya descontadas (0.05% al abrir y al cerrar).</div>";
+
+  if (rel !== null){
+    notas += rel >= 1.8
+      ? "<div class='nota'>✔ Buen equilibrio: <b>" + rel.toFixed(1) + " a 1</b>. Ganas " + rel.toFixed(1) +
+        " veces lo que arriesgas, así que te basta acertar " + (100/(1+rel)).toFixed(0) + " de cada 100 veces para no perder.</div>"
+      : "<div class='nota alerta'>⚠️ Equilibrio flojo: <b>" + rel.toFixed(1) + " a 1</b>. Necesitarías acertar más de " +
+        (100/(1+rel)).toFixed(0) + " de cada 100 veces solo para quedar en tablas. Aleja el Take Profit o acerca el Stop Loss.</div>";
+  }
+
+  // Aviso de seguridad: si a ese apalancamiento te liquidarían antes de que salte el stop.
+  if (sl > 0){
+    const distLiq = Math.min(0.9 / lev, 1 / lev - MMR_EST);
+    const liq = long ? entrada * (1 - distLiq) : entrada * (1 + distLiq);
+    if (long ? sl <= liq : sl >= liq)
+      notas += "<div class='nota alerta' style='border-color:var(--red); background:#2a1214; color:#ffb3b6'>🚫 <b>No uses " + lev +
+        "x aquí.</b> Te liquidarían cerca de " + fmtPrecio(liq, dec) + ", antes de que tu Stop Loss alcance a cerrarte: perderías todo el dinero de la operación. Baja el apalancamiento.</div>";
+  }
+
+  cont.innerHTML = "<div class='resumen' style='grid-template-columns:repeat(" + (tp > 0 && sl > 0 ? 2 : 1) + ",1fr)'>" + filas + "</div>" + notas;
+}
+
 // ---------- Navegación por pestañas ----------
 function verPestana(nombre, boton){
-  ["operar","mercado","ia","ajustes","guia"].forEach(p =>
+  ["operar","mercado","calc","ia","ajustes","guia"].forEach(p =>
     document.getElementById("p-" + p).classList.toggle("oculto", p !== nombre));
   [].forEach.call(document.querySelectorAll("nav.tabs button"), b => b.classList.remove("activa"));
   if (boton) boton.classList.add("activa");
