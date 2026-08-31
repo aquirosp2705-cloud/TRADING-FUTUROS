@@ -90,7 +90,7 @@
   .ia-sug button:hover{background:#2c3d5e; color:#fff;}
   #consulta{margin:0 22px 16px;}
   #monedaConsulta{text-transform:uppercase;}
-  #btnConsultar, #btnIA, #btnGuardarClave{background:var(--green); border:none; color:#fff; font-weight:700; font-size:14.5px; padding:10px 20px; border-radius:8px; cursor:pointer;}
+  #btnConsultar, #btnIA, #btnGuardarClave, #btnCopiar{background:var(--green); border:none; color:#fff; font-weight:700; font-size:14.5px; padding:10px 20px; border-radius:8px; cursor:pointer;}
   #btnConsultar:hover, #btnIA:hover, #btnGuardarClave:hover{filter:brightness(1.1);}
   #btnConsultar:disabled, #btnIA:disabled{opacity:.5; cursor:wait;}
   .pista{color:var(--muted); font-size:13px;}
@@ -173,7 +173,7 @@
 <nav class="tabs">
   <button class="activa" onclick="verPestana('operar', this)">🎯 Operar</button>
   <button onclick="verPestana('mercado', this)">📊 Mercado</button>
-  <button onclick="verPestana('ia', this)">🤖 Pregúntale a la IA</button>
+  <button onclick="verPestana('ia', this)">🤖 Asistente</button>
   <button onclick="verPestana('ajustes', this)">⚙️ Ajustes</button>
   <button onclick="verPestana('guia', this)">📘 Guía</button>
 </nav>
@@ -245,44 +245,57 @@
 <!-- ══════════════ ASISTENTE IA ══════════════ -->
 <section class="panel oculto" id="p-ia">
   <div class="cajaOp">
-    <h2>🤖 Pregúntale a la IA sobre el mercado</h2>
-    <div id="iaSinClave">
-      <div class="nota">
-        Esta pestaña conecta con <b>Claude</b> (la IA de Anthropic) para que puedas preguntarle lo que quieras sobre las monedas
-        que la app acaba de analizar. Necesitas una clave propia:
-        <ol style="margin:9px 0 9px 20px; line-height:1.7">
-          <li>Entra en <b>console.anthropic.com</b>, crea una cuenta y añade saldo (con $5 tienes para cientos de preguntas).</li>
-          <li>En <b>API Keys</b>, crea una clave y cópiala.</li>
-          <li>Pégala aquí abajo. <b>Se guarda solo en este navegador</b>, nunca dentro del archivo — así puedes compartir la app sin regalar tu clave.</li>
-        </ol>
-        Cada pregunta cuesta aproximadamente entre 1 y 5 centavos de dólar.
-      </div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px">
-        <div class="campo" style="flex:1; min-width:280px"><label>Tu clave de Anthropic</label>
-          <input type="password" id="iaClave" placeholder="sk-ant-..." style="width:100%"></div>
-        <button id="btnGuardarClave" onclick="guardarClaveIA()">Guardar clave</button>
-      </div>
+    <h2>🤖 Asistente — pregúntame sobre el mercado de hoy</h2>
+    <div class="pista">Funciona solo, sin internet extra y sin pagar nada: responde con los datos que la app acaba de calcular.</div>
+    <div class="ia-chat" id="iaChat"><div class="planVacio">Pulsa una pregunta de abajo o escribe la tuya.</div></div>
+    <div class="ia-sug">
+      <button onclick="sugerenciaIA(this)">¿Qué opinas del mercado hoy?</button>
+      <button onclick="sugerenciaIA(this)">¿Debería operar hoy?</button>
+      <button onclick="sugerenciaIA(this)">¿Por qué descartaste esas monedas?</button>
+      <button onclick="sugerenciaIA(this)">¿Cuál aguanta sin que la vigile?</button>
+      <button onclick="sugerenciaIA(this)">¿Por qué perdí en mi última operación?</button>
+      <button onclick="sugerenciaIA(this)">¿Qué es el trailing stop?</button>
     </div>
-
-    <div id="iaPanel" style="display:none">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
-        <span class="pista">✔ Clave guardada en este navegador. La IA ve los datos que la app acaba de calcular.</span>
-        <button onclick="borrarClaveIA()" style="background:var(--panel2); border:1px solid var(--border); color:var(--muted); padding:6px 12px; font-size:12.5px; border-radius:6px; cursor:pointer">Borrar clave</button>
-      </div>
-      <div class="ia-chat" id="iaChat"><div class="planVacio">Hazle una pregunta. Ve el estudio de las monedas, el contexto de Bitcoin y tu configuración de riesgo.</div></div>
-      <div class="ia-sug">
-        <button onclick="sugerenciaIA(this)">¿Qué opinas del mercado hoy?</button>
-        <button onclick="sugerenciaIA(this)">¿Por qué descartaste las monedas de hoy?</button>
-        <button onclick="sugerenciaIA(this)">¿Debería operar hoy o esperar?</button>
-        <button onclick="sugerenciaIA(this)">Explícame mi última pérdida</button>
-      </div>
-      <textarea id="iaPregunta" placeholder="Escribe tu pregunta… Ej.: «de las monedas de hoy, ¿cuál aguantaría mejor sin que yo la vigile?»"></textarea>
-      <div style="display:flex; gap:10px; align-items:center; margin-top:9px">
-        <button id="btnIA" onclick="preguntarIA()">Preguntar</button>
-        <span class="pista" id="iaEstado"></span>
-      </div>
+    <textarea id="iaPregunta" placeholder="Escribe tu pregunta… También puedes escribir el nombre de una moneda (ej.: «qué tal SOL») o un término que no entiendas (ej.: «qué es el funding»)."></textarea>
+    <div style="display:flex; gap:10px; align-items:center; margin-top:9px; flex-wrap:wrap">
+      <button id="btnIA" onclick="preguntarIA()">Preguntar</button>
+      <span class="pista" id="iaEstado"></span>
     </div>
   </div>
+
+  <div class="cajaOp">
+    <h2>💬 Llevar el informe a tu Claude de siempre</h2>
+    <div class="nota">
+      Tu <b>suscripción mensual de Claude</b> no se puede conectar a esta app (la suscripción y la API son cosas separadas,
+      y ninguna página web puede usar tu suscripción). Pero sí puedes aprovecharla así, <b>sin gastar ni un centavo de más</b>:
+      pulsa el botón, abre Claude como siempre, pega el informe y pregúntale lo que quieras. Verá exactamente los mismos datos que ve esta app.
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; margin-top:12px; flex-wrap:wrap">
+      <button id="btnCopiar" onclick="copiarInforme()">📋 Copiar informe del mercado</button>
+      <span class="pista" id="copiaEstado"></span>
+    </div>
+    <textarea id="informeTexto" style="display:none; width:100%; min-height:190px; margin-top:12px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:11px; font-size:12.5px; font-family:ui-monospace,Consolas,monospace"></textarea>
+  </div>
+
+  <details style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:13px 17px; margin-top:6px">
+    <summary style="cursor:pointer; font-weight:700; font-size:14px; color:var(--muted)">⚙️ Opcional: conectar una clave de API para respuestas automáticas</summary>
+    <div style="margin-top:11px">
+      <div class="nota">
+        Esto es <b>de pago aparte</b> (entre 1 y 5 centavos por pregunta) y <b>no lo necesitas</b>: el asistente de arriba es gratis
+        y el botón de copiar te deja usar tu suscripción. Úsalo solo si algún día quieres respuestas automáticas dentro de la app.
+        La clave se guarda solo en este navegador, nunca dentro del archivo.
+      </div>
+      <div id="iaSinClave" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px">
+        <div class="campo" style="flex:1; min-width:260px"><label>Clave de Anthropic (opcional)</label>
+          <input type="password" id="iaClave" placeholder="sk-ant-..." style="width:100%"></div>
+        <button id="btnGuardarClave" onclick="guardarClaveIA()">Guardar</button>
+      </div>
+      <div id="iaPanel" style="display:none; margin-top:12px">
+        <span class="pista">✔ Clave activa: el asistente de arriba responderá con Claude en vez de con las respuestas locales.</span>
+        <button onclick="borrarClaveIA()" style="margin-left:10px; background:var(--panel2); border:1px solid var(--border); color:var(--muted); padding:6px 12px; font-size:12.5px; border-radius:6px; cursor:pointer">Borrar clave</button>
+      </div>
+    </div>
+  </details>
 </section>
 
 <!-- ══════════════ AJUSTES ══════════════ -->
@@ -759,10 +772,206 @@ const SISTEMA_IA =
   "- No ejecutas operaciones ni le pides claves: solo informas. Ella opera en Binance.\n" +
   "- Sé breve: 3 a 6 párrafos cortos como máximo, salvo que pida más detalle.";
 
+// ---------- Asistente LOCAL (gratis, sin claves ni internet extra) ----------
+// Responde con lo que la app ya calculó. No inventa: si no hay datos, lo dice.
+const GLOSARIO = {
+  "stop loss": "El Stop Loss es el precio donde tu operación se cierra sola si vas perdiendo. Es tu paracaídas: sin él, una mala operación puede vaciarte la cuenta. Esta app lo coloca detrás del mínimo (o máximo) reciente del mercado para que no salte por el vaivén normal del precio.",
+  "take profit": "El Take Profit es el precio donde recoges la ganancia automáticamente. Se coloca al doble de distancia que el Stop Loss: así, aunque falles más veces de las que aciertas, el balance puede salir positivo.",
+  "trailing": "El Trailing Stop es un stop que se mueve solo. Le das dos datos: el precio de activación (a partir del cual empieza a seguir al precio) y la tasa de callback (cuánto retroceso tolera antes de cerrar). Es la solución cuando no puedes estar pendiente: lo pones al abrir y Binance hace el trabajo. Ojo: en Binance se llama «Trailing Stop», en inglés, aunque tengas la app en español.",
+  "apalancamiento": "El apalancamiento multiplica el tamaño de tu posición sin poner todo el dinero. Con 3x, $100 de margen mueven $300. No aumenta tu riesgo si respetas el stop loss — lo que aumenta es la cercanía de la liquidación. Por eso la app avisa cuando el apalancamiento que eliges pondría la liquidación antes que tu stop.",
+  "margen aislado": "Margen aislado significa que solo arriesgas el dinero que depositaste en esa operación concreta. Si sale muy mal, el resto de tu cuenta queda intacto. El margen cruzado, en cambio, puede llevarse toda la cuenta. Esta app siempre asume aislado.",
+  "liquidacion": "La liquidación es cuando el exchange cierra tu posición a la fuerza porque el margen ya no cubre la pérdida. Pierdes todo el margen de esa operación. Un stop loss bien puesto salta mucho antes, y por eso la app comprueba siempre que tu stop actúe primero.",
+  "funding": "El funding es un pago que se intercambia entre compradores y vendedores cada pocas horas (normalmente 8, a veces 4). Si es positivo, los que están comprados pagan; si es negativo, cobran. La app te dice en cada plan si te lo pagan a ti o lo pagas tú.",
+  "eficiencia": "La eficiencia mide si el precio avanza en línea recta o dando tumbos. Cerca del 100% es una tendencia limpia; por debajo del 20% el mercado está picado, y ahí el stop salta por puro ruido aunque hayas acertado la dirección. Es la forma más común de perder teniendo razón.",
+  "atr": "El ATR mide cuánto se mueve una moneda de media en cada vela. Sirve para poner el stop a una distancia realista: ni tan cerca que salte por nada, ni tan lejos que la pérdida sea grande.",
+  "rsi": "El RSI mide si el precio está sobrecalentado (por encima de 70) o muy castigado (por debajo de 30). La app lo usa para no entrar justo cuando un movimiento está agotado.",
+  "margen": "El margen es el dinero que depositas en una operación concreta. Con margen aislado, es también lo máximo que puedes perder en ella.",
+  "callback": "La tasa de callback es cuánto puede retroceder el precio antes de que el trailing stop cierre tu posición. Binance admite entre 0.1% y 10%. La app te calcula un valor coherente con el riesgo de esa operación."
+};
+
+function moneda(nombre){
+  const n = String(nombre).toUpperCase();
+  return datos.find(d => d.nombre === n || d.nombre === "1000" + n);
+}
+
+function respIntro(){
+  if (!datos.length) return "Todavía no he analizado el mercado en esta sesión. Ve a la pestaña 📊 Mercado y pulsa «Analizar mercado»; después vuelve y te respondo con datos de verdad.";
+  return null;
+}
+
+function respMercado(){
+  const falta = respIntro(); if (falta) return falta;
+  const nL = datos.filter(d => d.senal === "LONG").length, nS = datos.filter(d => d.senal === "SHORT").length;
+  const estudiadas = datos.filter(d => d.exp && d.senal !== "ESPERAR");
+  const buenas = estudiadas.filter(d => d.exp.veredicto === "pref");
+  const regulares = estudiadas.filter(d => d.exp.veredicto === "acep");
+  let t = "";
+  if (ctxBTC) t += "Bitcoin está " + (ctxBTC.alcista ? "ALCISTA" : "BAJISTA") + ", y como casi todas las monedas lo siguen, hoy el viento sopla a favor de las operaciones " + (ctxBTC.alcista ? "de compra (LONG)" : "de venta (SHORT)") + ".\n\n";
+  t += "De las " + datos.length + " monedas que miré, " + nL + " dan señal de compra y " + nS + " de venta. ";
+  t += estudiadas.length ? "Estudié a fondo " + estudiadas.length + " de ellas.\n\n" : "Ninguna pasó los filtros básicos.\n\n";
+  if (buenas.length){
+    const m = buenas[0];
+    t += "Hay " + buenas.length + " que me convence" + (buenas.length > 1 ? "n" : "") + ". La mejor es " + m.nombre + " (" + m.senal + ", nota " + m.exp.pts + "/100).\n";
+    t += m.exp.notas.filter(n => n.startsWith("✔")).slice(0, 3).map(n => "· " + n.replace(/^✔ /, "").replace(/<[^>]+>/g, "")).join("\n");
+  } else if (regulares.length){
+    t += "Ninguna me entusiasma. Las menos malas son " + regulares.slice(0, 3).map(d => d.nombre + " (" + d.exp.pts + ")").join(", ") + ", pero son solo «aceptables»: si fuera mi dinero, esperaría a algo mejor.";
+  } else {
+    t += "Y te lo digo claro: hoy no hay nada que valga la pena. Todas las candidatas quedaron descartadas o marcadas como riesgosas. Un día sin operar no es un día perdido.";
+  }
+  return t;
+}
+
+function respOperarHoy(){
+  const falta = respIntro(); if (falta) return falta;
+  const buenas = datos.filter(d => d.exp && d.exp.veredicto === "pref" && d.senal !== "ESPERAR");
+  if (!buenas.length){
+    const acep = datos.filter(d => d.exp && d.exp.veredicto === "acep" && d.senal !== "ESPERAR");
+    return "Mi respuesta honesta: NO.\n\n" + (acep.length
+      ? "Lo mejor que hay son " + acep.length + " monedas «aceptables» (" + acep.slice(0,3).map(d => d.nombre).join(", ") + "), y aceptable no es suficiente para arriesgar tu dinero."
+      : "Ninguna moneda pasa el listón hoy.") +
+      "\n\nEsperar también es operar. Los días que no entras son los que te protegen el capital para cuando aparezca algo bueno de verdad.";
+  }
+  const m = buenas[0];
+  return "Sí, hay al menos una opción decente: " + m.nombre + " en " + (m.senal === "LONG" ? "LONG (comprar)" : "SHORT (vender)") +
+    ", con nota " + m.exp.pts + "/100.\n\nVe a la pestaña 🎯 Operar, escribe " + m.nombre + " y te doy la ficha completa para Binance.\n\n" +
+    "Recuerda: una operación a la vez, dos como máximo. Y una nota alta no garantiza nada — solo dice que es lo mejor que hay disponible hoy.";
+}
+
+function respDescartadas(){
+  const falta = respIntro(); if (falta) return falta;
+  const malas = datos.filter(d => d.exp && d.senal !== "ESPERAR" && (d.exp.veredicto === "desc" || d.exp.veredicto === "ries"));
+  if (!malas.length) return "Hoy no descarté ninguna moneda con señal: las que había pasaron el estudio.";
+  let t = "Descarté o marqué como riesgosas " + malas.length + " monedas. Estas son las razones, moneda por moneda:\n\n";
+  malas.slice(0, 8).forEach(d => {
+    const contras = d.exp.notas.filter(n => n.startsWith("✘") || n.startsWith("🚫"));
+    t += "▸ " + d.nombre + " (" + d.exp.pts + "/100)\n" +
+      (contras.length ? contras.map(n => "   " + n.replace(/^[✘🚫] /, "").replace(/<[^>]+>/g, "")).join("\n") : "   Nota insuficiente en el conjunto de factores.") + "\n\n";
+  });
+  if (desatendida()) t += "Recuerda que estás en modo DESATENDIDA: exijo tendencia limpia y volatilidad contenida, porque una moneda nerviosa te alcanza el stop mientras trabajas.";
+  return t.trim();
+}
+
+function respDesatendida(){
+  const falta = respIntro(); if (falta) return falta;
+  const aptas = datos.filter(d => d.exp && d.senal !== "ESPERAR" && d.efic >= EXIG_DESATENDIDA.efic && d.atrPct <= EXIG_DESATENDIDA.atrMax);
+  if (!aptas.length) return "Ninguna moneda de hoy aguanta quedarse sola.\n\nPara dejar una posición sin vigilancia le exijo dos cosas: tendencia limpia (eficiencia sobre " +
+    (EXIG_DESATENDIDA.efic*100) + "%) y que no se mueva más de " + EXIG_DESATENDIDA.atrMax + "% por vela. Hoy no las cumple ninguna: todas te saltarían el stop por puro vaivén mientras estás trabajando.\n\nEs justo el tipo de día en el que conviene no operar.";
+  aptas.sort((a,b) => b.exp.pts - a.exp.pts);
+  let t = "Estas sí aguantarían sin que las mires:\n\n";
+  aptas.slice(0, 5).forEach(d => {
+    t += "▸ " + d.nombre + " " + d.senal + " — nota " + d.exp.pts + "/100, tendencia " + (d.efic*100).toFixed(0) + "% limpia, se mueve " + d.atrPct.toFixed(1) + "% por vela\n";
+  });
+  return t + "\nAun así, deja siempre el Stop Loss y el Take Profit puestos al abrir, y si puedes, el Trailing Stop. Así se cierra sola pase lo que pase.";
+}
+
+function respPerdida(){
+  return "Sin ver tu operación concreta no puedo saber qué pasó exactamente, pero las causas suelen ser estas cuatro, por orden de frecuencia:\n\n" +
+    "1. Mercado picado. El precio iba en tu dirección pero dando tumbos, y el vaivén alcanzó tu stop antes de llegar al objetivo. Acertaste la dirección y perdiste igual. Por eso ahora castigo fuerte las monedas con tendencia sucia.\n\n" +
+    "2. Moneda demasiado nerviosa. Si se mueve un 3% por vela, tu stop está siempre a tiro. Ahora las descarto en modo desatendida.\n\n" +
+    "3. Ir contra Bitcoin. Un SHORT con Bitcoin subiendo (o al revés) es remar contra el mercado entero.\n\n" +
+    "4. Y la más importante: que simplemente tocaba perder. Con objetivos 2:1 se pierde en cerca de la mitad de las operaciones POR DISEÑO. Perder $5 de $500 con el stop haciendo su trabajo no es un fallo del sistema: es el sistema funcionando.\n\n" +
+    "El error que sí arruina cuentas no es perder una operación, es entrar con el triple de dinero para recuperarla.";
+}
+
+function respMoneda(d){
+  if (!d.exp || d.senal === "ESPERAR")
+    return d.nombre + " no tiene ahora una dirección clara: sus medias móviles están cruzadas, así que ni comprar ni vender tiene sentido. No la operes.";
+  const v = { pref: "es de las mejores de hoy", acep: "es aceptable, sin entusiasmarme", ries: "es riesgosa", desc: "está descartada" }[d.exp.veredicto];
+  return d.nombre + " — señal de " + (d.senal === "LONG" ? "compra (LONG)" : "venta (SHORT)") + ", nota " + d.exp.pts + "/100: " + v + ".\n\n" +
+    d.exp.notas.map(n => "· " + n.replace(/^[✔✘•🚫] /, "").replace(/<[^>]+>/g, "")).join("\n") +
+    "\n\nPara la ficha completa de Binance, ve a 🎯 Operar y escribe " + d.nombre + ".";
+}
+
+function responderLocal(pregunta){
+  const q = pregunta.toLowerCase();
+  const tiene = (...ws) => ws.some(w => q.indexOf(w) >= 0);
+
+  for (const termino in GLOSARIO)
+    if (q.indexOf(termino) >= 0) return GLOSARIO[termino];
+
+  if (tiene("perdí", "perdi ", "pérdida", "perdida", "por qué pierdo", "salta el stop", "me cerró", "me cerro")) return respPerdida();
+  if (tiene("vigil", "desatend", "sin mirar", "pendiente", "aguanta", "sola")) return respDesatendida();
+  if (tiene("descart", "rechaz", "por qué no", "porque no", "riesgosa")) return respDescartadas();
+  if (tiene("debo operar", "debería operar", "deberia operar", "opero hoy", "operar hoy", "entro hoy", "vale la pena")) return respOperarHoy();
+  if (tiene("mercado", "hoy", "panorama", "opinas", "qué tal", "que tal", "resumen")){
+    const m = datos.find(d => q.indexOf(d.nombre.toLowerCase()) >= 0);
+    return m ? respMoneda(m) : respMercado();
+  }
+  const m = datos.find(d => d.nombre.length > 2 && q.indexOf(d.nombre.toLowerCase()) >= 0);
+  if (m) return respMoneda(m);
+
+  return "No he entendido bien la pregunta. Puedo ayudarte con:\n\n" +
+    "· Cómo está el mercado hoy y si conviene operar\n" +
+    "· Por qué descarté una moneda concreta (escribe su nombre)\n" +
+    "· Qué monedas aguantan sin que las vigiles\n" +
+    "· Por qué se pierde una operación\n" +
+    "· Qué significa cualquier término: stop loss, take profit, trailing stop, apalancamiento, margen aislado, liquidación, funding, eficiencia, ATR, RSI\n\n" +
+    "Y si quieres una conversación de verdad, usa el botón «Copiar informe del mercado» de abajo y pégalo en tu Claude de siempre.";
+}
+
+// ---------- Informe para pegar en Claude (o donde quieras) ----------
+function textoInforme(){
+  const l = [];
+  l.push("Actúa como un operador de futuros con experiencia y aconséjame. Soy una profesional de finanzas sin experiencia técnica en trading, opero futuros de Binance con $" +
+    document.getElementById("capital").value + " y NO puedo estar pendiente del teléfono durante el día.");
+  l.push("");
+  l.push("MI CONFIGURACIÓN: riesgo " + document.getElementById("riesgo").value + "% por operación · objetivo " +
+    document.getElementById("rr").value + ":1 · temporalidad " + etiquetaTf(document.getElementById("tf").value) +
+    " · modo " + (desatendida() ? "DESATENDIDA (no puedo vigilar la posición)" : "vigilada"));
+  if (ctxBTC) l.push("BITCOIN: " + (ctxBTC.alcista ? "alcista" : "bajista") + " en la temporalidad superior. Casi todas las monedas lo siguen.");
+  if (!datos.length){
+    l.push("");
+    l.push("(Todavía no he analizado el mercado hoy.)");
+    return l.join("\n");
+  }
+  const nL = datos.filter(d => d.senal === "LONG").length, nS = datos.filter(d => d.senal === "SHORT").length;
+  l.push("RADAR: " + datos.length + " monedas · " + nL + " señales de compra · " + nS + " de venta");
+  l.push("");
+  l.push("ESTUDIO DE LAS MEJORES CANDIDATAS (nota sobre 100 y motivos):");
+  datos.filter(d => d.exp && d.senal !== "ESPERAR").slice(0, 10).forEach(d => {
+    l.push("");
+    l.push("- " + d.nombre + " · " + d.senal + " · nota " + d.exp.pts + "/100 · veredicto: " + d.exp.veredicto);
+    l.push("  precio " + d.precio + " · volatilidad " + d.atrPct.toFixed(2) + "% por vela · tendencia " + (d.efic*100).toFixed(0) + "% limpia · RSI " + d.rsi.toFixed(0));
+    d.exp.notas.forEach(n => l.push("  " + n.replace(/<[^>]+>/g, "")));
+  });
+  l.push("");
+  l.push("CÓMO SE CALCULAN LOS PLANES: stop loss a 1.5 veces el ATR o detrás del mínimo/máximo de las últimas 20 velas (lo que quede más lejos); take profit al doble de esa distancia; el tamaño de la posición sale de arriesgar solo el % indicado del capital; margen siempre aislado.");
+  l.push("");
+  l.push("MIS PREGUNTAS: ¿operarías hoy alguna de estas? ¿Cuál y por qué? Si tu respuesta es que no opere, dímelo claramente.");
+  return l.join("\n");
+}
+
+function copiarInforme(){
+  const txt = textoInforme();
+  const est = document.getElementById("copiaEstado");
+  const area = document.getElementById("informeTexto");
+  const mostrar = () => {
+    area.style.display = "";
+    area.value = txt;
+    area.focus(); area.select();
+    est.textContent = "Selecciónalo y copia con Ctrl+C, luego pégalo en Claude.";
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(() => {
+      est.textContent = "✔ Informe copiado. Abre Claude, pega con Ctrl+V y pregúntale lo que quieras.";
+      area.style.display = "none";
+    }).catch(mostrar);
+  } else mostrar();
+}
+
 async function preguntarIA(){
   const clave = claveIA();
-  if (!clave){ pintarEstadoIA(); return; }
   const campo = document.getElementById("iaPregunta");
+  // Sin clave (el caso normal), responde el asistente local: gratis e instantáneo.
+  if (!clave){
+    const pregunta = campo.value.trim();
+    if (!pregunta) return;
+    mensajeIA("Tú", pregunta, "yo");
+    campo.value = "";
+    mensajeIA("Asistente", responderLocal(pregunta), "bot");
+    document.getElementById("iaEstado").textContent = "";
+    return;
+  }
   const pregunta = campo.value.trim();
   if (!pregunta) return;
   const btn = document.getElementById("btnIA"), est = document.getElementById("iaEstado");
