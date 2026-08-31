@@ -1193,10 +1193,17 @@ async function calcular(){
 
   const fl = filtros[nom + "USDT"] || {};
   const dec = fl.tick ? decimalesDe(fl.tick) : (String(entrada).split(".")[1] || "").length;
-  let cantidad = (dinero * lev) / entrada;
-  // Aquí se redondea al múltiplo MÁS CERCANO (no hacia abajo): si pones $31.60 esperando
-  // 0.002 BTC, unos céntimos de diferencia no deben dejarte con la mitad de posición.
-  if (fl.paso) cantidad = aPaso(cantidad, fl.paso, "round");
+  // Binance te cobra la comisión de apertura ADEMÁS del margen. Si gastas hasta el
+  // último centavo en margen, la orden se rechaza por "margen insuficiente". Por eso
+  // el tamaño se calcula dejando sitio para esa comisión.
+  const nocionalMax = dinero / (1 / lev + TAKER_FEE);
+  let cantidad = nocionalMax / entrada;
+  if (fl.paso) cantidad = aPaso(cantidad, fl.paso, "floor");
+  // Si al reservar la comisión se pierde una unidad entera, se recupera cuando cabe.
+  if (fl.paso){
+    const conUnaMas = cantidad + fl.paso;
+    if (conUnaMas * entrada * (1 / lev + TAKER_FEE) <= dinero) cantidad = conUnaMas;
+  }
   const decQty = fl.paso ? decimalesDe(fl.paso) : 4;
   if (!(cantidad > 0))
     return err("Con $" + dinero.toFixed(2) + " a " + lev + "x no llegas a la cantidad mínima que negocia " + nom + ". Sube el dinero o el apalancamiento.");
@@ -1220,9 +1227,13 @@ async function calcular(){
   }
 
   const rel = (gananciaNeta !== null && perdidaTotal > 0) ? gananciaNeta / perdidaTotal : null;
+  const necesitas = nocional / lev + nocional * TAKER_FEE;
   let notas = "<div class='nota' style='margin-top:12px'><b>" + (long ? "Compra (LONG)" : "Venta (SHORT)") + "</b> de <b>" +
     cantidad.toFixed(decQty) + " " + nom + "</b> · cada punto que se mueva " + nom + " son $" + cantidad.toFixed(decQty) +
-    " para ti · comisiones ya descontadas (0.05% al abrir y al cerrar).</div>";
+    " para ti · comisiones ya descontadas (0.05% al abrir y al cerrar).<br>" +
+    "💳 <b>Necesitas $" + necesitas.toFixed(2) + " libres</b> en tu monedero de Futuros para que Binance acepte esta orden " +
+    "(el margen más la comisión de apertura). Si te dice «margen insuficiente», es que tienes menos disponible: " +
+    "revisa cuánto tienes sin usar y cuánto está retenido en otras posiciones abiertas.</div>";
 
   if (rel !== null){
     notas += rel >= 1.8
