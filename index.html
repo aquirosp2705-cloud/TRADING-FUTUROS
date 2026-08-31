@@ -67,13 +67,33 @@
   details .glosa p{margin:8px 0;}
   details .glosa b{color:var(--text);}
   footer{padding:0 22px 30px; color:var(--muted); font-size:12px;}
+  /* ---- Pestañas ---- */
+  nav.tabs{display:flex; gap:4px; padding:0 22px; border-bottom:1px solid var(--border); flex-wrap:wrap; position:sticky; top:0; background:var(--bg); z-index:20;}
+  nav.tabs button{background:none; border:none; border-bottom:2.5px solid transparent; color:var(--muted); font-size:14.5px; font-weight:600; padding:11px 15px; cursor:pointer; white-space:nowrap;}
+  nav.tabs button:hover{color:var(--text);}
+  nav.tabs button.activa{color:var(--blue); border-bottom-color:var(--blue);}
+  section.panel{padding:16px 22px 30px;}
+  section.panel.oculto{display:none;}
+  .cajaOp{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:15px 17px; margin-bottom:6px;}
+  .cajaOp h2{font-size:14px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:12px;}
+  .avisoMini{margin:0 22px 12px; padding:8px 13px; background:#2a1f10; border:1px solid #5c4a1e; border-radius:7px; color:#e8c877; font-size:12.5px;}
+  /* ---- Asistente IA ---- */
+  .ia-chat{background:var(--panel2); border:1px solid var(--border); border-radius:9px; padding:14px; min-height:120px; max-height:460px; overflow-y:auto; margin:12px 0;}
+  .ia-msg{margin-bottom:14px; font-size:14px; line-height:1.6;}
+  .ia-msg .quien{font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:4px;}
+  .ia-msg.yo .quien{color:var(--muted);} .ia-msg.yo .txt{color:#c9d4e2;}
+  .ia-msg.bot .quien{color:var(--blue);} .ia-msg.bot .txt{color:var(--text); white-space:pre-wrap;}
+  .ia-msg.err .quien{color:var(--red);} .ia-msg.err .txt{color:#ffb3b6;}
+  #iaPregunta{width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:11px 13px; font-size:14.5px; font-family:inherit; resize:vertical; min-height:74px;}
+  .ia-sug{display:flex; gap:7px; flex-wrap:wrap; margin:9px 0;}
+  .ia-sug button{background:var(--chip); border:1px solid var(--border); color:#c9d4e2; border-radius:16px; padding:6px 13px; font-size:12.5px; cursor:pointer;}
+  .ia-sug button:hover{background:#2c3d5e; color:#fff;}
   #consulta{margin:0 22px 16px;}
-  #consulta .zona{padding:14px 16px;}
-  #consulta input{background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:9px 12px; font-size:15px; width:190px; text-transform:uppercase;}
-  #consulta button{background:var(--green); border:none; color:#fff; font-weight:700; font-size:14.5px; padding:10px 18px; border-radius:8px; cursor:pointer;}
-  #consulta button:hover{filter:brightness(1.1);}
-  #consulta button:disabled{opacity:.5; cursor:wait;}
-  #consulta .pista{color:var(--muted); font-size:13px;}
+  #monedaConsulta{text-transform:uppercase;}
+  #btnConsultar, #btnIA, #btnGuardarClave{background:var(--green); border:none; color:#fff; font-weight:700; font-size:14.5px; padding:10px 20px; border-radius:8px; cursor:pointer;}
+  #btnConsultar:hover, #btnIA:hover, #btnGuardarClave:hover{filter:brightness(1.1);}
+  #btnConsultar:disabled, #btnIA:disabled{opacity:.5; cursor:wait;}
+  .pista{color:var(--muted); font-size:13px;}
   .vivo{margin:10px 0 4px; padding:9px 13px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; font-size:13.5px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
   .vivo .precioGrande{font-size:18px; font-weight:800; font-variant-numeric:tabular-nums;}
   .vivo button{background:var(--amber); border:none; color:#1a1408; font-weight:700; border-radius:6px; cursor:pointer;}
@@ -147,71 +167,30 @@
 
 <header>
   <h1>📡 Radar de Futuros</h1>
-  <span class="sub">Criptomonedas · Futuros perpetuos USDT (datos públicos de Binance)</span>
+  <span class="sub">Criptomonedas · Futuros perpetuos USDT (datos de Binance)</span>
 </header>
 
-<div class="aviso">
-  ⚠️ <b>Herramienta educativa e informativa.</b> No es asesoría financiera y ningún sistema predice el mercado.
-  Los futuros con apalancamiento pueden hacerte perder dinero muy rápido. Opera solo con dinero que puedas permitirte perder.
+<nav class="tabs">
+  <button class="activa" onclick="verPestana('operar', this)">🎯 Operar</button>
+  <button onclick="verPestana('mercado', this)">📊 Mercado</button>
+  <button onclick="verPestana('ia', this)">🤖 Pregúntale a la IA</button>
+  <button onclick="verPestana('ajustes', this)">⚙️ Ajustes</button>
+  <button onclick="verPestana('guia', this)">📘 Guía</button>
+</nav>
+
+<div class="avisoMini">
+  ⚠️ Herramienta educativa. No es asesoría financiera y ningún sistema predice el mercado. Opera solo con dinero que puedas permitirte perder.
 </div>
 
-<div class="barra">
-  <div class="campo"><label>Capital (USD)</label><input type="number" id="capital" value="500" min="10" step="10"></div>
-  <div class="campo"><label>Riesgo por operación</label>
-    <select id="riesgo">
-      <option value="0.5">0.5% (muy prudente)</option>
-      <option value="1" selected>1% (recomendado)</option>
-      <option value="2">2% (agresivo)</option>
-    </select>
-  </div>
-  <div class="campo"><label>Beneficio : Riesgo</label>
-    <select id="rr">
-      <option value="1.5">1.5 a 1</option>
-      <option value="2" selected>2 a 1</option>
-      <option value="3">3 a 1</option>
-    </select>
-  </div>
-  <div class="campo"><label>Apalancamiento máx.</label>
-    <select id="maxlev">
-      <option value="3">3x</option>
-      <option value="5">5x</option>
-      <option value="10" selected>10x</option>
-      <option value="20">20x</option>
-    </select>
-  </div>
-  <div class="campo"><label>Temporalidad</label>
-    <select id="tf">
-      <option value="15m">15 minutos</option>
-      <option value="1h" selected>1 hora</option>
-      <option value="4h">4 horas</option>
-    </select>
-  </div>
-  <div class="campo"><label>¿Puedes vigilar la operación?</label>
-    <select id="modoOperar" style="width:250px">
-      <option value="desatendida" selected>NO puedo estar pendiente (desatendida)</option>
-      <option value="vigilada">Sí, puedo seguirla de cerca</option>
-    </select>
-  </div>
-  <div class="campo"><label>Mercado</label>
-    <select id="mercado">
-      <option value="cripto" selected>Solo criptomonedas</option>
-      <option value="todos">Todo: cripto + oro, petróleo, acciones</option>
-    </select>
-  </div>
-  <button id="btnAnalizar" onclick="analizar()">Analizar mercado</button>
-  <label class="auto"><input type="checkbox" id="auto"> Actualizar cada 60 s</label>
-</div>
-
-<div id="estado">Pulsa «Analizar mercado» para consultar precios en vivo.</div>
-
-<div class="tarjeta" id="consulta" style="display:none">
-  <h2>🔍 Asesoría por moneda — escribe la que te interesa</h2>
-  <div class="zona">
+<!-- ══════════════ OPERAR ══════════════ -->
+<section class="panel" id="p-operar">
+  <div class="cajaOp">
+    <h2>¿Qué moneda quieres consultar?</h2>
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
-      <div class="campo"><label>Moneda</label><input id="monedaConsulta" placeholder="Ej.: BTC, SOL…" maxlength="20"></div>
-      <div class="campo"><label>Valor a invertir (US$)</label><input type="number" id="montoInvertir" placeholder="Automático" min="1" step="5" style="width:140px"></div>
+      <div class="campo"><label>Moneda</label><input id="monedaConsulta" placeholder="Ej.: BTC, SOL…" maxlength="20" style="width:170px"></div>
+      <div class="campo"><label>Valor a invertir (US$)</label><input type="number" id="montoInvertir" placeholder="Automático" min="1" step="5" style="width:150px"></div>
       <div class="campo"><label>Apalancamiento</label>
-        <select id="levConsulta" style="width:135px">
+        <select id="levConsulta" style="width:140px">
           <option value="1">1x (sin apalanc.)</option>
           <option value="2">2x</option>
           <option value="3" selected>3x (recomendado)</option>
@@ -222,38 +201,152 @@
         </select>
       </div>
       <button id="btnConsultar" onclick="consultarMoneda()">Dame la asesoría</button>
-      <span class="pista">Siempre en <b>margen aislado</b>. Si dejas la inversión vacía, la calculo con tu regla de riesgo de arriba.</span>
+    </div>
+    <div class="pista" style="margin-top:9px">Siempre en <b>margen aislado</b>. Si dejas la inversión vacía, la calculo con tu regla de riesgo (pestaña Ajustes).</div>
+    <div id="recomendacion" class="nota" style="margin-top:12px; display:none"></div>
+  </div>
+  <div id="consultaResultado"></div>
+</section>
+
+<!-- ══════════════ MERCADO ══════════════ -->
+<section class="panel oculto" id="p-mercado">
+  <div class="cajaOp">
+    <h2>Análisis del mercado</h2>
+    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap">
+      <button id="btnAnalizar" onclick="analizar()">Analizar mercado</button>
+      <label class="auto"><input type="checkbox" id="auto"> Actualizar cada 60 s</label>
+      <span id="estado" style="font-size:13px">Pulsa «Analizar mercado» para ver el estudio completo.</span>
     </div>
     <div id="estudio" style="display:none"></div>
-    <div id="recomendacion" class="nota" style="margin-top:12px; display:none"></div>
-    <div id="consultaResultado"></div>
   </div>
-</div>
 
-<main>
-  <div class="tarjeta">
-    <h2 id="tituloRadar">Radar — 30 monedas más negociadas</h2>
-    <div style="overflow-x:auto">
-    <table>
-      <thead><tr>
-        <th>Moneda</th><th>Precio</th><th>24 h</th><th>Gráfico</th><th>Tendencia</th><th>RSI</th><th>Volat.</th><th>Señal</th><th>Solo técnica</th><th>NOTA DEL EXPERTO — esta es la que manda</th>
-      </tr></thead>
-      <tbody id="cuerpoTabla"><tr><td colspan="9" style="text-align:center; color:var(--muted); padding:24px">Sin datos todavía.</td></tr></tbody>
-    </table>
+  <main>
+    <div class="tarjeta">
+      <h2 id="tituloRadar">Radar — 30 monedas más negociadas</h2>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Moneda</th><th>Precio</th><th>24 h</th><th>Gráfico</th><th>Tendencia</th><th>RSI</th><th>Volat.</th><th>Señal</th><th>Solo técnica</th><th>NOTA DEL EXPERTO — esta es la que manda</th>
+        </tr></thead>
+        <tbody id="cuerpoTabla"><tr><td colspan="10" style="text-align:center; color:var(--muted); padding:24px">Sin datos todavía.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="tarjeta" id="plan">
+      <h2>Plan de operación</h2>
+      <div class="cuerpo" id="planCuerpo">
+        <div class="planVacio">Haz clic en una moneda de la tabla para ver su plan. Para la ficha completa de Binance, usa la pestaña <b>Operar</b>.</div>
+      </div>
+    </div>
+  </main>
+</section>
+
+<!-- ══════════════ ASISTENTE IA ══════════════ -->
+<section class="panel oculto" id="p-ia">
+  <div class="cajaOp">
+    <h2>🤖 Pregúntale a la IA sobre el mercado</h2>
+    <div id="iaSinClave">
+      <div class="nota">
+        Esta pestaña conecta con <b>Claude</b> (la IA de Anthropic) para que puedas preguntarle lo que quieras sobre las monedas
+        que la app acaba de analizar. Necesitas una clave propia:
+        <ol style="margin:9px 0 9px 20px; line-height:1.7">
+          <li>Entra en <b>console.anthropic.com</b>, crea una cuenta y añade saldo (con $5 tienes para cientos de preguntas).</li>
+          <li>En <b>API Keys</b>, crea una clave y cópiala.</li>
+          <li>Pégala aquí abajo. <b>Se guarda solo en este navegador</b>, nunca dentro del archivo — así puedes compartir la app sin regalar tu clave.</li>
+        </ol>
+        Cada pregunta cuesta aproximadamente entre 1 y 5 centavos de dólar.
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px">
+        <div class="campo" style="flex:1; min-width:280px"><label>Tu clave de Anthropic</label>
+          <input type="password" id="iaClave" placeholder="sk-ant-..." style="width:100%"></div>
+        <button id="btnGuardarClave" onclick="guardarClaveIA()">Guardar clave</button>
+      </div>
+    </div>
+
+    <div id="iaPanel" style="display:none">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
+        <span class="pista">✔ Clave guardada en este navegador. La IA ve los datos que la app acaba de calcular.</span>
+        <button onclick="borrarClaveIA()" style="background:var(--panel2); border:1px solid var(--border); color:var(--muted); padding:6px 12px; font-size:12.5px; border-radius:6px; cursor:pointer">Borrar clave</button>
+      </div>
+      <div class="ia-chat" id="iaChat"><div class="planVacio">Hazle una pregunta. Ve el estudio de las monedas, el contexto de Bitcoin y tu configuración de riesgo.</div></div>
+      <div class="ia-sug">
+        <button onclick="sugerenciaIA(this)">¿Qué opinas del mercado hoy?</button>
+        <button onclick="sugerenciaIA(this)">¿Por qué descartaste las monedas de hoy?</button>
+        <button onclick="sugerenciaIA(this)">¿Debería operar hoy o esperar?</button>
+        <button onclick="sugerenciaIA(this)">Explícame mi última pérdida</button>
+      </div>
+      <textarea id="iaPregunta" placeholder="Escribe tu pregunta… Ej.: «de las monedas de hoy, ¿cuál aguantaría mejor sin que yo la vigile?»"></textarea>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:9px">
+        <button id="btnIA" onclick="preguntarIA()">Preguntar</button>
+        <span class="pista" id="iaEstado"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ AJUSTES ══════════════ -->
+<section class="panel oculto" id="p-ajustes">
+  <div class="cajaOp">
+    <h2>Tu dinero y tu riesgo</h2>
+    <div class="barra" style="margin:0; padding:0; background:none; border:none">
+      <div class="campo"><label>Capital (USD)</label><input type="number" id="capital" value="500" min="10" step="10"></div>
+      <div class="campo"><label>Riesgo por operación</label>
+        <select id="riesgo">
+          <option value="0.5">0.5% (muy prudente)</option>
+          <option value="1" selected>1% (recomendado)</option>
+          <option value="2">2% (agresivo)</option>
+        </select>
+      </div>
+      <div class="campo"><label>Beneficio : Riesgo</label>
+        <select id="rr">
+          <option value="1.5">1.5 a 1</option>
+          <option value="2" selected>2 a 1</option>
+          <option value="3">3 a 1</option>
+        </select>
+      </div>
+      <div class="campo"><label>Apalancamiento máx. (radar)</label>
+        <select id="maxlev">
+          <option value="3">3x</option>
+          <option value="5">5x</option>
+          <option value="10" selected>10x</option>
+          <option value="20">20x</option>
+        </select>
+      </div>
     </div>
   </div>
 
-  <div class="tarjeta" id="plan">
-    <h2>Plan de operación</h2>
-    <div class="cuerpo" id="planCuerpo">
-      <div class="planVacio">Haz clic en una moneda de la tabla para ver su plan completo: entrada, stop loss, take profit, tamaño, apalancamiento y margen aislado.</div>
+  <div class="cajaOp">
+    <h2>Cómo vas a operar</h2>
+    <div class="barra" style="margin:0; padding:0; background:none; border:none">
+      <div class="campo"><label>¿Puedes vigilar la operación?</label>
+        <select id="modoOperar" style="width:260px">
+          <option value="desatendida" selected>NO puedo estar pendiente (desatendida)</option>
+          <option value="vigilada">Sí, puedo seguirla de cerca</option>
+        </select>
+      </div>
+      <div class="campo"><label>Temporalidad</label>
+        <select id="tf">
+          <option value="15m">15 minutos</option>
+          <option value="1h" selected>1 hora</option>
+          <option value="4h">4 horas</option>
+        </select>
+      </div>
+      <div class="campo"><label>Mercado</label>
+        <select id="mercado">
+          <option value="cripto" selected>Solo criptomonedas</option>
+          <option value="todos">Todo: cripto + oro, petróleo, acciones</option>
+        </select>
+      </div>
     </div>
+    <div class="pista" style="margin-top:10px">En modo <b>desatendida</b> la app descarta las monedas demasiado nerviosas o de tendencia sucia, aunque su señal técnica sea buena.</div>
   </div>
-</main>
+</section>
 
-<details>
-  <summary>📘 ¿Cómo funciona esta herramienta? (léelo una vez, en lenguaje llano)</summary>
-  <div class="glosa">
+<!-- ══════════════ GUÍA ══════════════ -->
+<section class="panel oculto" id="p-guia">
+  <div class="glosa" style="max-width:900px">
+
     <p><b>Qué hace el radar:</b> consulta en vivo las 30 monedas con más volumen en futuros de Binance y les aplica tres filtros técnicos:
     la <b>tendencia</b> (medias móviles de 20, 50 y 200 periodos alineadas), el <b>RSI</b> (que el precio no esté "sobrecalentado")
     y la <b>volatilidad</b> (que la moneda se mueva lo suficiente, pero no de forma salvaje). Solo cuando los tres filtros pasan, marca LONG (apostar a que sube) o SHORT (apostar a que baja). Si algo no cuadra, dice ESPERAR — y esperar también es una decisión de trading.</p>
@@ -269,12 +362,13 @@
     <p><b>Las dos notas no son lo mismo:</b> «Solo técnica» mira únicamente medias móviles y RSI de esa moneda. «Nota del experto» es la que manda: incluye Bitcoin, el volumen, si el mercado está picado y la temporalidad mayor. Una moneda puede tener 85 de técnica y 30 de experto — y entonces no se opera.</p>
     <p><b>La puntuación (0–100):</b> solo ordena qué señales cumplen los filtros con más holgura (tendencia más firme, RSI en zona sana, buena liquidez). <b>No es una probabilidad de ganar</b> — una señal de 85 puede fallar igual que una de 60.</p>
     <p><b>Reglas de oro:</b> máximo 2 operaciones abiertas a la vez · si pierdes 3 seguidas en el día, cierra la plataforma hasta mañana · nunca muevas el stop loss "para darle espacio" · el funding se paga o se cobra según su signo y tu dirección (normalmente cada 8 horas; en algunas monedas cada 4 o cada 1), revísalo si piensas mantener la posición días.</p>
-  </div>
-</details>
+    </div>
+</section>
 
 <footer>
   Datos: API pública de Binance Futures (no requiere cuenta ni claves). Esta herramienta no ejecuta operaciones: solo informa y calcula. Comisión estimada del exchange: ~0.05% por lado.
 </footer>
+
 
 <script>
 "use strict";
@@ -384,26 +478,7 @@ async function analizar(){
   btn.disabled = true;
   try {
     estado("Consultando precios en Binance…");
-    if (!mapaSimbolos){
-      const rInfo = await fetch(API + "/fapi/v1/exchangeInfo");
-      if (!rInfo.ok) throw new Error("HTTP " + rInfo.status);
-      const info = await rInfo.json();
-      mapaSimbolos = {};
-      for (const s of info.symbols){
-        if (s.quoteAsset === "USDT" && s.status === "TRADING" && s.contractType.includes("PERPETUAL")){
-          mapaSimbolos[s.symbol] = s.underlyingType;
-          // Binance solo acepta precios múltiplos del "tick" y cantidades múltiplos del "paso".
-          const pf = s.filters.find(f => f.filterType === "PRICE_FILTER");
-          const ls = s.filters.find(f => f.filterType === "LOT_SIZE");
-          const mn = s.filters.find(f => f.filterType === "MIN_NOTIONAL");
-          filtros[s.symbol] = {
-            tick: pf ? parseFloat(pf.tickSize) : 0,
-            paso: ls ? parseFloat(ls.stepSize) : 0,
-            minPos: mn ? parseFloat(mn.notional) : 0
-          };
-        }
-      }
-    }
+    if (!mapaSimbolos) await cargarSimbolos();
     const [rTickers, rFunding, rIntervalos] = await Promise.all([
       fetch(API + "/fapi/v1/ticker/24hr"),
       fetch(API + "/fapi/v1/premiumIndex"),
@@ -494,7 +569,6 @@ async function analizar(){
     if (!resultados.length){
       estado("No se pudieron descargar los datos de las monedas. Vuelve a intentarlo en unos segundos.", true);
     } else {
-      document.getElementById("consulta").style.display = "";
       document.getElementById("recomendacion").style.display = "none";
       const conSenal = resultados.filter(r => r.senal !== "ESPERAR").length;
       estado("Actualizado " + new Date().toLocaleTimeString("es-EC") + " · velas de " + etiquetaTf(tf) +
@@ -577,6 +651,175 @@ function etiquetaTf(tf){
 }
 function tfSuperior(tf){
   return tf === "15m" ? "1h" : tf === "1h" ? "4h" : "1d";
+}
+
+// Lista de símbolos negociables + reglas de precio/cantidad de cada uno.
+async function cargarSimbolos(){
+  const rInfo = await fetch(API + "/fapi/v1/exchangeInfo");
+  if (!rInfo.ok) throw new Error("HTTP " + rInfo.status);
+  const info = await rInfo.json();
+  mapaSimbolos = {};
+  for (const s of info.symbols){
+    if (s.quoteAsset === "USDT" && s.status === "TRADING" && s.contractType.includes("PERPETUAL")){
+      mapaSimbolos[s.symbol] = s.underlyingType;
+      // Binance solo acepta precios múltiplos del "tick" y cantidades múltiplos del "paso".
+      const pf = s.filters.find(f => f.filterType === "PRICE_FILTER");
+      const ls = s.filters.find(f => f.filterType === "LOT_SIZE");
+      const mn = s.filters.find(f => f.filterType === "MIN_NOTIONAL");
+      filtros[s.symbol] = {
+        tick: pf ? parseFloat(pf.tickSize) : 0,
+        paso: ls ? parseFloat(ls.stepSize) : 0,
+        minPos: mn ? parseFloat(mn.notional) : 0
+      };
+    }
+  }
+}
+
+// ---------- Asistente de IA (Claude) ----------
+// La clave vive SOLO en el navegador (localStorage), nunca dentro del archivo, para que
+// puedas copiar o compartir la app sin regalar tu clave.
+const IA_MODELO = "claude-opus-5";
+let historialIA = [];
+
+let claveMemoria = ""; // respaldo si el navegador no deja guardar nada (algunos bloquean file://)
+function claveIA(){
+  try { return localStorage.getItem("radar_clave_ia") || claveMemoria; } catch (e){ return claveMemoria; }
+}
+function pintarEstadoIA(){
+  const hay = !!claveIA();
+  document.getElementById("iaSinClave").style.display = hay ? "none" : "";
+  document.getElementById("iaPanel").style.display = hay ? "" : "none";
+}
+function guardarClaveIA(){
+  const v = document.getElementById("iaClave").value.trim();
+  if (!v){ alert("Pega tu clave antes de guardar."); return; }
+  claveMemoria = v;
+  let recordada = true;
+  try { localStorage.setItem("radar_clave_ia", v); } catch (e){ recordada = false; }
+  document.getElementById("iaClave").value = "";
+  pintarEstadoIA();
+  if (!recordada) document.getElementById("iaEstado").textContent =
+    "Clave activa para esta sesión (tu navegador no permite recordarla; tendrás que pegarla de nuevo al reabrir).";
+}
+function borrarClaveIA(){
+  claveMemoria = "";
+  try { localStorage.removeItem("radar_clave_ia"); } catch (e){}
+  historialIA = [];
+  document.getElementById("iaChat").innerHTML = "<div class='planVacio'>Clave borrada.</div>";
+  pintarEstadoIA();
+}
+function sugerenciaIA(b){
+  document.getElementById("iaPregunta").value = b.textContent;
+  preguntarIA();
+}
+function mensajeIA(quien, texto, clase){
+  const c = document.getElementById("iaChat");
+  if (c.querySelector(".planVacio")) c.innerHTML = "";
+  const d = document.createElement("div");
+  d.className = "ia-msg " + clase;
+  const q = document.createElement("div"); q.className = "quien"; q.textContent = quien;
+  const t = document.createElement("div"); t.className = "txt"; t.textContent = texto;
+  d.appendChild(q); d.appendChild(t); c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+  return t;
+}
+
+// Fotografía de lo que la app sabe ahora mismo, para que la IA responda con datos
+// reales y no con generalidades.
+function contextoMercado(){
+  const l = [];
+  l.push("CONFIGURACIÓN DE LA USUARIA: capital $" + document.getElementById("capital").value +
+    ", riesgo por operación " + document.getElementById("riesgo").value + "%, objetivo " +
+    document.getElementById("rr").value + ":1, temporalidad " + etiquetaTf(document.getElementById("tf").value) +
+    ", modo " + (desatendida() ? "DESATENDIDA (no puede vigilar la posición)" : "vigilada") + ".");
+  if (ctxBTC) l.push("BITCOIN: " + (ctxBTC.alcista ? "alcista" : "bajista") + " en la temporalidad superior.");
+  if (!datos.length){ l.push("Todavía no se ha analizado el mercado en esta sesión."); return l.join("\n"); }
+  const nL = datos.filter(d => d.senal === "LONG").length, nS = datos.filter(d => d.senal === "SHORT").length;
+  l.push("RADAR: " + datos.length + " monedas analizadas, " + nL + " con señal de compra y " + nS + " de venta.");
+  l.push("ESTUDIO EXPERTO (nota/100, veredicto y motivos):");
+  datos.filter(d => d.exp).slice(0, 10).forEach(d => {
+    l.push("- " + d.nombre + " " + d.senal + " · nota " + d.exp.pts + " · " + d.exp.veredicto +
+      " · precio " + d.precio + " · volatilidad " + d.atrPct.toFixed(2) + "%/vela · eficiencia " +
+      (d.efic * 100).toFixed(0) + "% · " + d.exp.notas.map(n => n.replace(/<[^>]+>/g, "")).join(" | "));
+  });
+  if (ultimaConsulta) l.push("ÚLTIMA MONEDA CONSULTADA: " + ultimaConsulta.d.nombre + " (" + ultimaConsulta.d.senal + ")");
+  return l.join("\n");
+}
+
+const SISTEMA_IA =
+  "Eres un operador de futuros con años de experiencia que asesora a una profesional de finanzas SIN experiencia técnica en trading. " +
+  "Tiene una cuenta de $500 en futuros de Binance y NO puede vigilar sus posiciones durante el día.\n\n" +
+  "REGLAS:\n" +
+  "- Responde en español claro y directo, sin jerga sin explicar. Usa frases cortas.\n" +
+  "- Básate en los DATOS DEL MERCADO que se te dan. Si te preguntan algo que los datos no cubren, dilo en vez de inventar.\n" +
+  "- NUNCA prometas ganancias ni des probabilidades de acierto. Ninguna señal predice el mercado.\n" +
+  "- Si la respuesta honesta es 'hoy no operes', dilo sin rodeos: esperar es una decisión válida.\n" +
+  "- Recuerda su contexto: no puede estar pendiente, así que prioriza monedas de tendencia limpia y volatilidad contenida, " +
+  "y soluciones que funcionen solas (stop loss, take profit y trailing stop puestos al abrir).\n" +
+  "- No ejecutas operaciones ni le pides claves: solo informas. Ella opera en Binance.\n" +
+  "- Sé breve: 3 a 6 párrafos cortos como máximo, salvo que pida más detalle.";
+
+async function preguntarIA(){
+  const clave = claveIA();
+  if (!clave){ pintarEstadoIA(); return; }
+  const campo = document.getElementById("iaPregunta");
+  const pregunta = campo.value.trim();
+  if (!pregunta) return;
+  const btn = document.getElementById("btnIA"), est = document.getElementById("iaEstado");
+  btn.disabled = true; est.textContent = "Pensando…";
+  mensajeIA("Tú", pregunta, "yo");
+  campo.value = "";
+  historialIA.push({ role: "user", content: "DATOS DEL MERCADO AHORA:\n" + contextoMercado() + "\n\nPREGUNTA: " + pregunta });
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": clave,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: IA_MODELO,
+        max_tokens: 4000,
+        system: SISTEMA_IA,
+        messages: historialIA
+      })
+    });
+    const j = await r.json();
+    if (!r.ok){
+      const m = j && j.error ? j.error.message : ("HTTP " + r.status);
+      historialIA.pop();
+      mensajeIA("Error", r.status === 401 ? "Tu clave no es válida o ha caducado. Bórrala y pega una nueva."
+        : r.status === 429 ? "Has llegado al límite de peticiones o te has quedado sin saldo en Anthropic."
+        : m, "err");
+      return;
+    }
+    if (j.stop_reason === "refusal"){
+      historialIA.pop();
+      mensajeIA("Aviso", "La IA no pudo responder a esa pregunta. Prueba a reformularla.", "err");
+      return;
+    }
+    const texto = (j.content || []).filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+    historialIA.push({ role: "assistant", content: texto || "(sin respuesta)" });
+    mensajeIA("Claude", texto || "(sin respuesta)", "bot");
+    if (j.usage) est.textContent = "Respondido · " + (j.usage.input_tokens + j.usage.output_tokens) + " tokens usados";
+  } catch (e){
+    historialIA.pop();
+    mensajeIA("Error", "No se pudo conectar con la IA (" + e.message + "). Revisa tu internet.", "err");
+  } finally {
+    btn.disabled = false;
+    if (est.textContent === "Pensando…") est.textContent = "";
+  }
+}
+
+// ---------- Navegación por pestañas ----------
+function verPestana(nombre, boton){
+  ["operar","mercado","ia","ajustes","guia"].forEach(p =>
+    document.getElementById("p-" + p).classList.toggle("oculto", p !== nombre));
+  [].forEach.call(document.querySelectorAll("nav.tabs button"), b => b.classList.remove("activa"));
+  if (boton) boton.classList.add("activa");
+  window.scrollTo(0, 0);
 }
 
 // ---------- Estudio experto de las 10 primeras ----------
@@ -1255,6 +1498,13 @@ async function consultarMoneda(){
     return;
   }
   if (nombre.endsWith("USDT")) nombre = nombre.slice(0, -4);
+  // La pestaña Operar funciona sola: si aún no se ha analizado el mercado, se carga
+  // aquí la lista de símbolos para no obligarte a pasar antes por otra pantalla.
+  if (!mapaSimbolos){
+    res.innerHTML = "<div class='planVacio' style='margin-top:12px'>Preparando datos de Binance…</div>";
+    try { await cargarSimbolos(); }
+    catch (e){ res.innerHTML = "<div class='nota alerta' style='margin-top:12px'>No se pudo conectar con Binance. Revisa tu internet.</div>"; return; }
+  }
   let symbol = nombre + "USDT";
   if (EXCLUIR.has(symbol)){
     res.innerHTML = "<div class='nota alerta' style='margin-top:12px'>" + nombre + " no es una moneda para operar (es una stablecoin o un índice).</div>";
@@ -1494,6 +1744,9 @@ function pintarEstudio(top, btc, htf){
     reparto + ctx + "<div style='overflow-x:auto'>" + tabla + "</div>" + informe;
   document.getElementById("recomendacion").style.display = "none";
 }
+
+// Arranque: se ejecuta al final, cuando todas las variables ya existen.
+pintarEstadoIA();
 
 function asesorarRecomendada(nombre){
   document.getElementById("monedaConsulta").value = nombre;
