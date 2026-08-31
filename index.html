@@ -1431,7 +1431,18 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
 
   const filaEntrada  = fila("Precio de entrada (aprox.)", fmtPrecio(entrada, dec) + " USDT");
   const filaSL       = fila("🛑 Stop Loss", fmtPrecio(sl, dec) + " USDT <span class='down'>(" + (long?"−":"+") + (Math.abs(sl-entrada)/entrada*100).toFixed(2) + "%)</span>");
-  const filaTP       = fila("🎯 Take Profit", fmtPrecio(tp, dec) + " USDT <span class='up'>(" + (long?"+":"−") + (Math.abs(tp-entrada)/entrada*100).toFixed(2) + "%)</span>");
+  // Objetivo intermedio: se alcanza MUCHO más a menudo que el objetivo completo.
+  // Cerrar ahí la mitad convierte ganancias que se evaporan en dinero cobrado.
+  const dist1R = Math.abs(entrada - sl);
+  const tp1 = aPaso(long ? entrada + dist1R : entrada - dist1R, fl.tick, long ? "floor" : "ceil");
+  const cant1 = fl.paso ? aPaso(cantidad / 2, fl.paso, "floor") : cantidad / 2;
+  const ganaParcial = cant1 * Math.abs(tp1 - entrada) - comision / 2;
+  const filaTP1 = cant1 > 0 ? fila("🎯 Objetivo 1 — cierra la MITAD aquí (" + cant1.toFixed(decQty) + " " + d.nombre + ")",
+    fmtPrecio(tp1, dec) + " USDT <span class='up'>(+$" + ganaParcial.toFixed(2) + " a tu bolsillo)</span>") : "";
+  // Si la posición es tan pequeña que no se puede partir en dos, hay que decirlo:
+  // intentar cerrar la mitad daría una cantidad que Binance rechaza.
+  const noSePuedePartir = gananciaPrimero && cant1 <= 0 && cantidad > 0;
+  const filaTP       = fila((cant1 > 0 ? "🏁 Objetivo 2 — el resto" : "🎯 Take Profit"), fmtPrecio(tp, dec) + " USDT <span class='up'>(" + (long?"+":"−") + (Math.abs(tp-entrada)/entrada*100).toFixed(2) + "%)</span>");
   const filaCant     = fila("Cantidad a " + (long ? "comprar" : "vender"), cantidad.toFixed(decQty) + " " + d.nombre);
   const filaValor    = fila("Valor de la posición", "$" + nocional.toFixed(2));
   const filaLev      = fila(levFijo ? "Apalancamiento (fijo)" : "Apalancamiento sugerido", lev + "x" + (levFijo ? " aislado" : ""));
@@ -1458,8 +1469,8 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
       "<span class='rs'>si toca el Stop Loss</span></div></div>";
 
   const filas = gananciaPrimero
-    ? filaGananciaTop + filaPerdida + filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaMuro + filaLiq + filaCom + filaFund
-    : filaEntrada + filaSL + filaTP + filaCant + filaValor + filaLev + filaMargen + filaPerdida + filaGanancia + filaMuro + filaLiq + filaCom + filaFund;
+    ? filaGananciaTop + filaPerdida + filaEntrada + filaSL + filaTP1 + filaTP + filaCant + filaValor + filaLev + filaMargen + filaMuro + filaLiq + filaCom + filaFund
+    : filaEntrada + filaSL + filaTP1 + filaTP + filaCant + filaValor + filaLev + filaMargen + filaPerdida + filaGanancia + filaMuro + filaLiq + filaCom + filaFund;
 
   if (gananciaPrimero) nivelesPlan = posInvalida ? null : { long, sl, tp, cantidad: cantidad.toFixed(decQty), lev, margen: margen.toFixed(2), dec };
 
@@ -1479,6 +1490,19 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
     : "";
 
   return (gananciaPrimero ? resumen + alertaLiq : "") + "<div class='filas'>" + filas + "</div>" +
+    (noSePuedePartir
+      ? "<div class='nota alerta'>⚠️ <b>Esta posición no se puede partir en dos.</b> " + d.nombre + " solo se negocia de " + fl.paso +
+        " en " + fl.paso + ", y con esta cantidad (" + cantidad.toFixed(decQty) + ") la mitad no llegaría al mínimo. " +
+        "Aquí es todo o nada: o cierras entera, o la dejas con su Take Profit. " +
+        "Para poder cobrar por el camino necesitas una posición de al menos <b>" + (2 * (fl.paso || 0)).toFixed(decQty) + " " + d.nombre +
+        "</b> (unos $" + (2 * (fl.paso || 0) * entrada / lev).toFixed(2) + " de margen a " + lev + "x).</div>"
+      : "") +
+    (gananciaPrimero && d.efic < 0.25 && cant1 > 0
+      ? "<div class='nota alerta'>⏳ <b>Con este mercado, cuenta con NO llegar al objetivo 2.</b> " + d.nombre +
+        " avanza dando tumbos (eficiencia " + (d.efic*100).toFixed(0) + "%), y en estas condiciones el precio sube y baja sin recorrer distancias largas. " +
+        "Por eso importa tanto <b>cerrar la mitad en el Objetivo 1 (" + fmtPrecio(tp1, dec) + ")</b>: es la diferencia entre cobrar $" +
+        ganaParcial.toFixed(2) + " o ver cómo la ganancia se evapora esperando algo que quizá no llegue.</div>"
+      : "") +
     (stopEstructural ? "<div class='nota'>🛡️ El stop no está puesto a una distancia cualquiera: se colocó <b>detrás del " +
       (long ? "mínimo" : "máximo") + " reciente</b> del mercado, para que no salte por el vaivén normal del precio. " +
       "Por eso está algo más lejos y la posición es más pequeña — arriesgas lo mismo, pero con más aire.</div>" : "") +
@@ -1573,6 +1597,21 @@ function revisarCheck(){
   }
 }
 
+// Cerrar media posición NO es cerrar y volver a abrir: se cierra solo una parte y el
+// resto sigue abierto, con tu precio de entrada y tu stop intactos.
+function comoCerrarMitad(long){
+  return "<details style='margin-top:7px'><summary style='cursor:pointer; color:#63a4ff; font-size:12.5px'>¿Cómo se cierra solo la mitad?</summary>" +
+    "<div style='font-size:12.5px; color:#c4cede; margin-top:6px; line-height:1.6'>" +
+    "<b>No cierres y vuelvas a abrir</b>: pagarías comisión dos veces y perderías tu precio de entrada. Binance deja cerrar una parte:" +
+    "<br><br><b>A mano, en el momento:</b> ve a <b>[Posiciones]</b>, pulsa <b>[Cerrar]</b> en la fila de tu operación, elige <b>Market</b> " +
+    "y <b>cambia la cantidad</b> a la mitad (o arrastra el deslizador al 50%). Confirmas y la mitad se cierra; la otra mitad sigue abierta igual que estaba." +
+    "<br><br><b>Automático, para no estar pendiente (recomendado):</b> abre una orden <b>Límite</b> de " + (long ? "venta" : "compra") +
+    " con la mitad de la cantidad, al precio del Objetivo 1, y marca <b>«Solo reducir» / «Reduce only»</b>. " +
+    "Se ejecutará sola cuando el precio llegue, estés donde estés." +
+    "<br><br>⚠️ <b>Ojo con el mínimo:</b> cada moneda se negocia en múltiplos fijos. Si la mitad de tu posición no llega a ese mínimo, " +
+    "Binance rechazará la orden y tendrás que cerrarla entera.</div></details>";
+}
+
 // Qué hacer DESPUÉS de entrar. Resuelve el problema real: no poder estar pendiente.
 // En cuanto el precio recorre la mitad del camino al objetivo, se mueve el stop al
 // punto de equilibrio y la operación deja de poder quitarte dinero.
@@ -1597,6 +1636,10 @@ function gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, tick
         "· <b>Tasa de callback</b>: <b>" + callback.toFixed(1) + "%</b> <span class='et' style='color:var(--muted)'>(Binance admite de 0.1% a 10%)</span></span></div>" +
       "<div class='paso'><span class='pn'>3</span><span>Ya está. A partir de ahí <b>Binance mueve el stop por ti</b>: si el precio avanza a tu favor, el stop lo sigue; " +
         "si retrocede " + callback.toFixed(1) + "%, cierra solo y te quedas con lo ganado. <b>No tienes que mirar el teléfono ni una vez.</b></span></div>" +
+      "<div class='paso'><span class='pn'>4</span><span><b>Cobra por el camino.</b> Deja además una orden límite de " + (long ? "venta" : "compra") + " de <b>la mitad</b> de tu posición en " +
+        "<b class='up'>" + fmtPrecio(nivel1R, dec) + "</b>, marcando «Solo reducir». Ese objetivo intermedio se alcanza mucho más a menudo que el completo: " +
+        "así cobras aunque el precio nunca llegue al objetivo final, que es lo que suele pasar en mercados que van dando tumbos." +
+        comoCerrarMitad(long) + "</span></div>" +
       "<div class='nota' style='margin-top:10px'>Deja también puesto tu Stop Loss de " + fmtPrecio(sl, dec) +
         " y tu Take Profit de " + fmtPrecio(tp, dec) + ": entre los tres, la operación se cierra sola pase lo que pase. " +
         "<b>Nunca dejes una posición abierta sin stop</b>, y menos si no vas a poder mirarla.</div>" +
@@ -1634,8 +1677,9 @@ function gestionPosicion(d, long, entrada, sl, tp, dec, cantidad, comision, tick
     "<div class='paso'><span class='pn'>2</span><span>Cuando salte esa alerta, <b>mueve tu Stop Loss</b> desde " + fmtPrecio(sl, dec) +
       " hasta <b>" + fmtPrecio(equilibrio, dec) + "</b> (tu precio de entrada más las comisiones). " +
       "Desde ese momento, <b>esa operación ya no puede quitarte dinero</b>: si el precio se da la vuelta, sales en tablas.</span></div>" +
-    "<div class='paso'><span class='pn'>3</span><span>Deja correr el resto hasta el Take Profit de " + fmtPrecio(tp, dec) +
-      ". Si prefieres asegurar, cierra <b>la mitad</b> de la posición en la alerta del paso 1 y deja la otra mitad con el stop ya en equilibrio.</span></div>" +
+    "<div class='paso'><span class='pn'>3</span><span><b>Cierra la mitad</b> de la posición en ese mismo precio de " + fmtPrecio(nivel1R, dec) +
+      " y deja correr la otra mitad hasta " + fmtPrecio(tp, dec) + " con el stop ya en equilibrio. " +
+      "Ese objetivo intermedio se alcanza mucho más a menudo que el completo: así cobras de verdad en vez de ver cómo la ganancia se evapora." + comoCerrarMitad(long) + "</span></div>" +
     "<div class='nota' style='margin-top:10px'>Esto es lo que convierte una racha normal de pérdidas en algo soportable: " +
       "las operaciones que se dan la vuelta a mitad de camino salen en $0 en vez de −$" + (cantidad * distReal).toFixed(2) + ". " +
       "<b>No muevas el stop en la dirección contraria</b> (nunca lo alejes para «darle una oportunidad»): eso es lo que convierte una pérdida pequeña en una grande.</div>" +
@@ -1651,7 +1695,9 @@ function fichaOrden(d, long, lev, cant, margen, sl, tp, dec){
     campo(2, "Apalancamiento", lev + "x") +
     campo(3, "Tipo de orden", "MERCADO (Market)") +
     campo(4, "Botón a pulsar", long ? "<span class='up'>▲ Abrir largo (verde)</span>" : "<span class='down'>▼ Abrir corto (rojo)</span>") +
-    campo(5, "Cantidad", cant + " " + d.nombre + " <span class='et' style='font-weight:400'>(≈ $" + margen.toFixed(2) + " de margen)</span>") +
+    campo(5, "Cantidad", "<span style='font-size:17px'>" + cant + " " + d.nombre + "</span>" +
+      "<br><span class='et' style='font-weight:400; font-size:12.5px'>Si tu campo está en USDT, escribe " +
+      (parseFloat(cant) * d.precio).toFixed(2) + " · Margen que se descuenta: $" + margen.toFixed(2) + "</span>") +
     campo(6, "Take Profit", "<span class='up'>" + fmtPrecio(tp, dec) + "</span>") +
     campo(7, "Stop Loss", "<span class='down'>" + fmtPrecio(sl, dec) + "</span>") +
     campo(8, "Disparador (Trigger)", "Precio de marca") +
@@ -1660,6 +1706,9 @@ function fichaOrden(d, long, lev, cant, margen, sl, tp, dec){
     "Si eliges <b>Límite</b>, Binance valida el TP y el SL contra <i>tu</i> precio límite, no contra el precio actual — es una causa habitual de que rechace los niveles.</div>" +
     "<ul class='lista'>" +
     "<li>Llena los campos <b>en ese orden</b>: el margen y el apalancamiento se eligen ANTES de abrir.</li>" +
+    "<li><b>Comprueba la cantidad antes de confirmar.</b> Binance tiene un selector que cambia el campo entre moneda y USDT, " +
+    "y un mínimo por debajo del cual redondea. Si abres con una cantidad menor a la de la ficha, ganarás y perderás en proporción: " +
+    "tu operación será más pequeña de lo que decidiste.</li>" +
     "<li>" + (long ? "En LONG el TP va ARRIBA del precio y el SL ABAJO." : "En SHORT el TP va ABAJO del precio y el SL ARRIBA.") + " Si los inviertes, Binance los rechaza.</li>" +
     "<li>No muevas el stop loss. Máximo 2 posiciones abiertas a la vez.</li>" +
     "<li>Los precios cambian cada segundo: recalcula justo antes de entrar.</li>" +
