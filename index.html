@@ -1086,9 +1086,18 @@ let datosCalc = null; // datos de la moneda de la calculadora, para sugerir TP y
 document.getElementById("cMoneda").addEventListener("change", traerPrecioCalc);
 document.getElementById("cMoneda").addEventListener("keydown", e => { if (e.key === "Enter") traerPrecioCalc(); });
 
+let buscandoCalc = false; // evita dos búsquedas a la vez (al salir del campo y al pulsar el botón)
 async function traerPrecioCalc(){
   let n = document.getElementById("cMoneda").value.trim().toUpperCase().replace(/\s+/g, "");
-  if (!n) return;
+  if (!n || buscandoCalc) return;
+  buscandoCalc = true;
+  const btn = document.getElementById("btnCalc");
+  btn.disabled = true;
+  try { await buscarYRellenar(n); }
+  finally { buscandoCalc = false; btn.disabled = false; }
+}
+
+async function buscarYRellenar(n){
   if (n.endsWith("USDT")) n = n.slice(0, -4);
   let symbol = n + "USDT";
   try {
@@ -1151,9 +1160,17 @@ function rellenarNiveles(){
   calcular();
 }
 
-function calcular(){
+// El botón lo hace TODO: si solo has escrito la moneda, va a buscar el precio y los
+// niveles y luego calcula. Nunca te exige rellenar nada a mano.
+async function calcular(){
   const cont = document.getElementById("cResultado");
   const nom = document.getElementById("cMoneda").value.trim().toUpperCase() || "la moneda";
+  const hay = id => parseFloat(document.getElementById(id).value) > 0;
+  if (document.getElementById("cMoneda").value.trim() && (!hay("cEntrada") || (!hay("cTP") && !hay("cSL")))){
+    await traerPrecioCalc();   // rellena precio, dirección, TP y SL y vuelve a llamar aquí
+    return;
+  }
+
   const entrada = parseFloat(document.getElementById("cEntrada").value);
   const dinero  = parseFloat(document.getElementById("cDinero").value);
   const lev     = parseInt(document.getElementById("cLev").value);
@@ -1161,9 +1178,9 @@ function calcular(){
   const sl      = parseFloat(document.getElementById("cSL").value);
   const err = m => cont.innerHTML = "<div class='nota alerta' style='margin-top:14px'>" + m + "</div>";
 
-  if (!(entrada > 0)) return err("Falta el precio de entrada. Escribe la moneda y te lo traigo, o ponlo a mano.");
+  if (!(entrada > 0)) return err("Escribe la moneda (por ejemplo BTC) y pulsa Calcular: yo traigo el precio y los niveles.");
   if (!(dinero > 0))  return err("Falta el dinero que vas a poner.");
-  if (!(tp > 0) && !(sl > 0)) return err("Pon al menos un Take Profit o un Stop Loss.");
+  if (!(tp > 0) && !(sl > 0)) return err("Escribe la moneda y pulsa Calcular para que rellene el Take Profit y el Stop Loss, o ponlos tú.");
 
   // La dirección se deduce sola: si el objetivo está arriba es compra, si está abajo, venta.
   const long = tp > 0 ? tp > entrada : sl < entrada;
