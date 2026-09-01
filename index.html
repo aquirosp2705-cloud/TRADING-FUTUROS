@@ -197,7 +197,13 @@
     <h2>¿Qué moneda quieres consultar?</h2>
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end;">
       <div class="campo"><label>Moneda</label><input id="monedaConsulta" placeholder="Ej.: BTC, SOL…" maxlength="20" style="width:170px"></div>
-      <div class="campo"><label>Valor a invertir (US$)</label><input type="number" id="montoInvertir" placeholder="Automático" min="1" step="5" style="width:150px"></div>
+      <div class="campo"><label>Cuánto quiero operar</label><input type="number" id="montoInvertir" placeholder="Automático" min="0" step="any" style="width:150px"></div>
+      <div class="campo"><label>Expresado en</label>
+        <select id="unidadMonto" style="width:150px" onchange="cambiarUnidad()">
+          <option value="usd" selected>US$ (dinero)</option>
+          <option value="moneda">Monedas</option>
+        </select>
+      </div>
       <div class="campo"><label>Apalancamiento</label>
         <select id="levConsulta" style="width:140px">
           <option value="1">1x (sin apalanc.)</option>
@@ -267,12 +273,21 @@
         </select>
       </div>
       <div class="campo"><label>Mi precio de entrada</label><input type="number" id="vEntrada" step="any" style="width:150px"></div>
-      <div class="campo"><label>Cantidad de monedas</label><input type="number" id="vCant" step="any" placeholder="Ej.: 0.002" style="width:150px"></div>
+      <div class="campo"><label>Tamaño de la posición</label><input type="number" id="vCant" step="any" placeholder="Ej.: 0.002" style="width:150px" oninput="equivalenciaPos()"></div>
+      <div class="campo"><label>Expresado en</label>
+        <select id="vUnidad" style="width:150px" onchange="equivalenciaPos()">
+          <option value="moneda" selected>Monedas</option>
+          <option value="usd">US$ (tamaño)</option>
+        </select>
+      </div>
     </div>
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:14px">
       <div class="campo"><label>🎯 Take Profit</label><input type="number" id="vTP" step="any" style="width:150px"></div>
       <div class="campo"><label>🛑 Stop Loss</label><input type="number" id="vSL" step="any" style="width:150px"></div>
       <button id="btnVigilar" onclick="anadirPosicion()">Añadir y vigilar</button>
+    </div>
+    <div class="pista" id="vEquiv" style="margin-top:8px"></div>
+    <div style="display:none">
     </div>
     <div id="vError"></div>
   </div>
@@ -1140,6 +1155,20 @@ function recuperarPos(){
   return [];
 }
 
+// Muestra la equivalencia mientras escribe, para que vea siempre las dos cifras.
+function equivalenciaPos(){
+  const el = document.getElementById("vEquiv");
+  const val = parseFloat(document.getElementById("vCant").value);
+  const ent = parseFloat(document.getElementById("vEntrada").value);
+  const n = document.getElementById("vMoneda").value.trim().toUpperCase() || "monedas";
+  if (!(val > 0) || !(ent > 0)){ el.textContent = "Escribe también tu precio de entrada y te muestro la equivalencia."; return; }
+  el.innerHTML = document.getElementById("vUnidad").value === "usd"
+    ? "≈ <b>" + (val / ent).toFixed(6).replace(/0+$/,"").replace(/\.$/,"") + " " + n + "</b> (tamaño de $" + val.toFixed(2) + ")"
+    : "≈ <b>$" + (val * ent).toFixed(2) + "</b> de tamaño (" + val + " " + n + ")";
+}
+document.getElementById("vEntrada").addEventListener("input", equivalenciaPos);
+document.getElementById("vMoneda").addEventListener("input", equivalenciaPos);
+
 async function anadirPosicion(){
   const v = id => document.getElementById(id).value;
   const err = m => document.getElementById("vError").innerHTML = "<div class='nota alerta' style='margin-top:12px'>" + m + "</div>";
@@ -1148,10 +1177,13 @@ async function anadirPosicion(){
 
   let n = v("vMoneda").trim().toUpperCase().replace(/\s+/g, "");
   if (n.endsWith("USDT")) n = n.slice(0, -4);
-  const entrada = parseFloat(v("vEntrada")), cant = parseFloat(v("vCant"));
+  const entrada = parseFloat(v("vEntrada"));
+  // El tamaño puede venir en monedas o en dólares; dentro siempre se trabaja en monedas.
+  const bruto = parseFloat(v("vCant"));
+  const cant = (v("vUnidad") === "usd" && entrada > 0) ? bruto / entrada : bruto;
   const tp = parseFloat(v("vTP")), sl = parseFloat(v("vSL"));
   if (!n) return err("Escribe la moneda de tu operación.");
-  if (!(entrada > 0) || !(cant > 0)) return err("Necesito tu precio de entrada y cuántas monedas tienes.");
+  if (!(entrada > 0) || !(cant > 0)) return err("Necesito tu precio de entrada y el tamaño de tu posición.");
   if (!(sl > 0)) return err("Necesito tu Stop Loss: sin él no puedo decirte cuánto arriesgas.");
 
   const btn = document.getElementById("btnVigilar");
@@ -1734,6 +1766,25 @@ function notasDobles(d){
   return tec + " · <b>Nota del experto: " + d.exp.pts + "/100</b> ← esta es la que manda";
 }
 
+let dirForzada = null; // dirección elegida a mano cuando la app no recomienda ninguna
+
+// Selector para elegir el lado cuando la app no da una dirección propia.
+function selectorDireccion(long){
+  return "<div class='nota' style='display:flex; gap:12px; align-items:center; flex-wrap:wrap'>" +
+    "<b>Si aun así vas a entrar, ¿de qué lado?</b>" +
+    "<select onchange='cambiarDirForzada(this.value)' style='background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px 11px; font-size:14px'>" +
+    "<option value='long'" + (long ? " selected" : "") + ">Compra (LONG) — apuesto a que sube</option>" +
+    "<option value='short'" + (!long ? " selected" : "") + ">Venta (SHORT) — apuesto a que baja</option>" +
+    "</select></div>";
+}
+function cambiarDirForzada(v){
+  dirForzada = v === "long";
+  if (ultimaConsulta){
+    document.getElementById("consultaResultado").innerHTML = htmlConsulta(ultimaConsulta.d, ultimaConsulta.tf);
+    arrancarVigilancia(ultimaConsulta.d);
+  }
+}
+
 // Respuesta directa a «¿qué te parece esta moneda?»: lo primero que se ve, en grande.
 function dictamen(d, long){
   const v = d.exp ? d.exp.veredicto : null;
@@ -1883,11 +1934,16 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
     lev = Math.max(1, Math.min(maxLev, lev));
   }
 
-  // ¿Escribió la usuaria cuánto quiere invertir? (solo en la asesoría por moneda)
-  let inversion = null, invAjustada = false;
+  // ¿Escribió la usuaria cuánto quiere operar? Puede hacerlo en dólares o en monedas;
+  // aquí se traduce siempre a dinero (margen), que es lo que usa el resto del cálculo.
+  let inversion = null, invAjustada = false, cantPedida = null;
   if (levFijo){
     const vInv = parseFloat(document.getElementById("montoInvertir").value);
-    if (Number.isFinite(vInv) && vInv > 0) inversion = vInv;
+    const enMonedas = document.getElementById("unidadMonto").value === "moneda";
+    if (Number.isFinite(vInv) && vInv > 0){
+      if (enMonedas){ cantPedida = vInv; inversion = vInv * entrada / lev; }
+      else inversion = vInv;
+    }
   }
 
   let cantidad, nocional, margen;
@@ -1971,8 +2027,13 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
   const fichaRapida = !gananciaPrimero ? "" :
     "<div class='rapida'>" +
     "<div class='cabRapida'><span>💵 ¿Cuánto pongo en " + d.nombre + "?</span>" +
-    "<input type='number' id='montoRapido' value='" + (inversion !== null ? inversion.toFixed(2) : margen.toFixed(2)) +
-    "' min='1' step='5' onchange='cambiarMonto(this.value)'> <span class='pista'>US$</span></div>" +
+    "<input type='number' id='montoRapido' step='any' value='" +
+      (unidadEsMoneda() ? cantidad.toFixed(decQty) : margen.toFixed(2)) +
+    "' onchange='cambiarMonto(this.value)'>" +
+    "<select onchange='cambiarUnidadRapida(this.value)' style='background:var(--panel2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:9px 10px; font-size:14px'>" +
+      "<option value='usd'" + (unidadEsMoneda() ? "" : " selected") + ">US$</option>" +
+      "<option value='moneda'" + (unidadEsMoneda() ? " selected" : "") + ">" + d.nombre + "</option></select>" +
+    "<span class='pista'>= " + (unidadEsMoneda() ? "$" + margen.toFixed(2) + " de tu dinero" : cantidad.toFixed(decQty) + " " + d.nombre) + "</span></div>" +
     "<div class='filas'>" +
     fr(1, "Precio de entrada", fmtPrecio(entrada, dec) + " USDT") +
     fr(2, "Posición", "<b>" + cantidad.toFixed(decQty) + " " + d.nombre + "</b> · $" + nocional.toFixed(2)) +
@@ -2350,6 +2411,7 @@ async function consultarMoneda(){
     const hSup = await tendenciaDe(symbol, tfSuperior(tf));
     if (!ctxBTC) ctxBTC = await tendenciaDe("BTCUSDT", tfSuperior(tf));
     evaluarExperto(d, hSup, ctxBTC, tfSuperior(tf));
+    dirForzada = null;   // cada moneda empieza con la dirección que sugiere el mercado
     ultimaConsulta = { d, tf };
     res.innerHTML = htmlConsulta(d, tf);
     arrancarVigilancia(d);
@@ -2383,16 +2445,27 @@ function htmlConsulta(d, tf){
   const alcista = d.tendencia === "Alcista", bajista = d.tendencia === "Bajista";
 
   if (!alcista && !bajista){
+    // Sin tendencia no hay dirección honesta que recomendar, pero los números se
+    // muestran igual: ella decide el lado y ve exactamente qué arriesga.
+    const long = dirForzada !== null ? dirForzada : (d.e20 >= d.e50);
     return cab + "<span class='senal ESPERAR'>ESPERAR</span>" +
-      "<span class='precio'>velas de " + etiquetaTf(tf) + "</span></div>" +
+      "<span class='precio'>velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
       "<div class='dictamen no'><span class='dt'>NO la operes ahora</span>" +
       "<span class='dx'>Esta moneda no tiene una dirección definida: ni comprar ni vender tiene sentido en este momento.</span></div>" +
       vivo +
       "<div class='planVacio'>Mi asesoría ahora mismo es <b>no entrar</b> en esta moneda:</div>" + razonesHtml +
-      "<div class='nota'>Sin tendencia definida no hay forma honesta de recomendarte LONG o SHORT: sería una moneda al aire. Consulta otra moneda o vuelve a intentarlo más tarde.</div>";
+      "<div class='nota'>Sin tendencia definida no hay forma honesta de recomendarte comprar o vender: sería una moneda al aire. " +
+      "Lo sensato es buscar otra moneda o volver más tarde.</div>" +
+      "<details style='background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:13px 17px; margin-top:12px'>" +
+      "<summary style='cursor:pointer; font-weight:700; font-size:14px; color:var(--muted)'>Ver los números igualmente (no recomendado)</summary>" +
+      "<div style='margin-top:11px'>" +
+      "<div class='nota alerta'>⚠️ Esto <b>no es una recomendación</b>: la app sigue diciendo que no operes esta moneda. " +
+      "Son solo los números por si decides entrar bajo tu criterio.</div>" +
+      selectorDireccion(long) + banner(long) + calcularFilasPlan(d, long, levConsulta(), true) +
+      "</div></details>" + ayudaBinance();
   }
 
-  const long = alcista;
+  const long = dirForzada !== null ? dirForzada : alcista;
   return cab + "<span class='senal ESPERAR'>ESPERAR</span>" +
     "<span class='precio'>velas de " + etiquetaTf(tf) + " · " + levConsulta() + "x aislado</span></div>" +
     "<div class='dictamen quiza'><span class='dt'>ESPERA — todavía no</span>" +
@@ -2403,6 +2476,7 @@ function htmlConsulta(d, tf){
     "<div class='nota alerta'>⚠️ Si aun así decides entrar, la tendencia de fondo es " +
     (long ? "<b>alcista → LONG (comprar)</b>" : "<b>bajista → SHORT (vender)</b>") +
     " y el plan prudente a " + levConsulta() + "x aislado sería el siguiente — pero recuerda que los filtros NO se cumplen:</div>" +
+    selectorDireccion(long) +
     banner(long) + calcularFilasPlan(d, long, levConsulta(), true) + ayudaBinance();
 }
 
@@ -2536,6 +2610,27 @@ pintarEstadoIA();
   leerMercadoPos().then(latido).then(arrancarRelojes);
 })();
 
+function unidadEsMoneda(){
+  const u = document.getElementById("unidadMonto");
+  return u && u.value === "moneda";
+}
+// Al cambiar de unidad se convierte el número escrito, para que no haya que rehacerlo.
+function cambiarUnidad(){
+  const campo = document.getElementById("montoInvertir");
+  const v = parseFloat(campo.value);
+  const d = ultimaConsulta ? ultimaConsulta.d : null;
+  if (d && Number.isFinite(v) && v > 0){
+    const lev = levConsulta();
+    campo.value = unidadEsMoneda()
+      ? (v * lev / d.precio).toFixed(6).replace(/0+$/,"").replace(/\.$/,"")  // dinero → monedas
+      : (v * d.precio / lev).toFixed(2);                                      // monedas → dinero
+  }
+  if (ultimaConsulta) cambiarMonto(campo.value);
+}
+function cambiarUnidadRapida(u){
+  document.getElementById("unidadMonto").value = u;
+  cambiarUnidad();
+}
 // El recuadro de monto de la ficha rápida manda sobre el de arriba: se sincronizan.
 function cambiarMonto(v){
   document.getElementById("montoInvertir").value = v;
