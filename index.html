@@ -131,6 +131,13 @@
   .veredictoCheck.bien{background:rgba(46,163,107,.14); color:var(--green); border:1px solid rgba(46,163,107,.45);}
   .veredictoCheck.mal{background:rgba(229,72,77,.13); color:#ffb3b6; border:1px solid rgba(229,72,77,.5);}
   .veredictoCheck.neutro{background:var(--panel2); color:var(--muted); border:1px solid var(--border);}
+  .rapida{margin:14px 0 6px; padding:15px 17px; background:#111a26; border:2px solid var(--blue); border-radius:11px;}
+  .cabRapida{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; font-size:15px; font-weight:700;}
+  .cabRapida input{background:var(--panel2); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:9px 12px; font-size:17px; font-weight:800; width:130px;}
+  .rapida .fila{font-size:15px; padding:9px 2px;}
+  .rapida .fila .v{font-size:16px;}
+  .rapida .fila.destacada{background:#18222f; margin:0 -8px; padding:10px;}
+  .rapida .n{display:inline-block; width:20px; height:20px; line-height:20px; text-align:center; background:var(--chip); border-radius:50%; font-size:11px; font-weight:700; color:var(--text); margin-right:9px;}
   .resumen{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0 4px;}
   @media(max-width:520px){ .resumen{grid-template-columns:1fr;} }
   .rcel{padding:12px 10px; border-radius:9px; text-align:center; background:var(--panel2); border:1.5px solid var(--border);}
@@ -173,7 +180,7 @@
 <nav class="tabs">
   <button class="activa" onclick="verPestana('operar', this)">🎯 Operar</button>
   <button onclick="verPestana('mercado', this)">📊 Mercado</button>
-  <button onclick="verPestana('vivo', this)">📈 Mi posición</button>
+  <button onclick="verPestana('vivo', this)">📈 Mi posición<span id="avisoPestana"></span></button>
   <button onclick="verPestana('calc', this)">🧮 Calculadora</button>
   <button onclick="verPestana('ia', this)">🤖 Asistente</button>
   <button onclick="verPestana('ajustes', this)">⚙️ Ajustes</button>
@@ -246,9 +253,11 @@
 
 <!-- ══════════════ MI POSICIÓN EN VIVO ══════════════ -->
 <section class="panel oculto" id="p-vivo">
+  <div id="vAlerta"></div>
+
   <div class="cajaOp" id="vivoForm">
-    <h2>📈 Vigilar mi operación abierta</h2>
-    <div class="pista" style="margin-bottom:12px">Escribe los datos de la operación que ya tienes abierta en Binance y te la sigo en vivo: te digo cómo va y si conviene salir o aguantar.</div>
+    <h2>📈 Vigilar mis operaciones abiertas <span class="pista" id="vCupo"></span></h2>
+    <div class="pista" style="margin-bottom:12px">Escribe los datos de una operación que ya tengas abierta en Binance. Puedes vigilar hasta <b>dos a la vez</b>.</div>
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end">
       <div class="campo"><label>Moneda</label><input id="vMoneda" placeholder="BTC" maxlength="20" style="width:120px; text-transform:uppercase"></div>
       <div class="campo"><label>Dirección</label>
@@ -263,23 +272,12 @@
     <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin-top:14px">
       <div class="campo"><label>🎯 Take Profit</label><input type="number" id="vTP" step="any" style="width:150px"></div>
       <div class="campo"><label>🛑 Stop Loss</label><input type="number" id="vSL" step="any" style="width:150px"></div>
-      <button id="btnVigilar" onclick="empezarVigilancia()">Empezar a vigilar</button>
+      <button id="btnVigilar" onclick="anadirPosicion()">Añadir y vigilar</button>
     </div>
+    <div id="vError"></div>
   </div>
 
-  <div id="vivoPanel" style="display:none">
-    <div class="cajaOp">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:4px">
-        <h2 style="margin:0" id="vTitulo">—</h2>
-        <button onclick="pararVigilancia()" style="background:var(--panel2); border:1px solid var(--border); color:var(--muted); padding:7px 14px; font-size:12.5px; border-radius:6px; cursor:pointer">Dejar de vigilar</button>
-      </div>
-      <div id="vVeredicto"></div>
-      <div id="vCifras"></div>
-      <div id="vBarra"></div>
-      <div id="vMercado"></div>
-      <div class="pista" id="vActualizado" style="margin-top:10px"></div>
-    </div>
-  </div>
+  <div id="vTarjetas"></div>
 </section>
 
 <!-- ══════════════ CALCULADORA ══════════════ -->
@@ -1120,29 +1118,38 @@ function calcularNiveles(d, long, entrada, rr){
 
 let datosCalc = null; // datos de la moneda de la calculadora, para sugerir TP y SL
 
-// ---------- Vigilancia en vivo de una posición abierta ----------
+// ---------- Vigilancia en vivo de hasta DOS posiciones abiertas ----------
 // Sigue el precio de marca (el que usa Binance para disparar TP/SL) y relee el mercado
-// cada minuto, para decir si conviene aguantar, asegurar o salir.
-let posVigilada = null, timerPos = null, timerMercadoPos = null, mercadoPos = null;
+// cada minuto, para decir en cada una si conviene aguantar, asegurar o salir.
+let posiciones = [], timerPos = null, timerMercadoPos = null;
+const MAX_POS = 2;
 
 function guardarPos(){
-  try { localStorage.setItem("radar_posicion", JSON.stringify(posVigilada)); } catch (e){}
+  try {
+    localStorage.setItem("radar_posiciones", JSON.stringify(posiciones.map(p => ({
+      id: p.id, symbol: p.symbol, nombre: p.nombre, long: p.long,
+      entrada: p.entrada, cant: p.cant, tp: p.tp, sl: p.sl, dec: p.dec
+    }))));
+  } catch (e){}
 }
 function recuperarPos(){
   try {
-    const g = localStorage.getItem("radar_posicion");
-    if (g) return JSON.parse(g);
+    const g = localStorage.getItem("radar_posiciones");
+    if (g){ const a = JSON.parse(g); if (Array.isArray(a)) return a; }
   } catch (e){}
-  return null;
+  return [];
 }
 
-async function empezarVigilancia(){
+async function anadirPosicion(){
   const v = id => document.getElementById(id).value;
+  const err = m => document.getElementById("vError").innerHTML = "<div class='nota alerta' style='margin-top:12px'>" + m + "</div>";
+  document.getElementById("vError").innerHTML = "";
+  if (posiciones.length >= MAX_POS) return err("Ya estás vigilando dos posiciones. Quita una para añadir otra.");
+
   let n = v("vMoneda").trim().toUpperCase().replace(/\s+/g, "");
   if (n.endsWith("USDT")) n = n.slice(0, -4);
   const entrada = parseFloat(v("vEntrada")), cant = parseFloat(v("vCant"));
   const tp = parseFloat(v("vTP")), sl = parseFloat(v("vSL"));
-  const err = m => document.getElementById("vivoPanel").innerHTML = "<div class='cajaOp'><div class='nota alerta'>" + m + "</div></div>";
   if (!n) return err("Escribe la moneda de tu operación.");
   if (!(entrada > 0) || !(cant > 0)) return err("Necesito tu precio de entrada y cuántas monedas tienes.");
   if (!(sl > 0)) return err("Necesito tu Stop Loss: sin él no puedo decirte cuánto arriesgas.");
@@ -1153,165 +1160,207 @@ async function empezarVigilancia(){
     if (!mapaSimbolos) await cargarSimbolos();
     let symbol = n + "USDT";
     if (!mapaSimbolos[symbol] && mapaSimbolos["1000" + symbol]) symbol = "1000" + symbol;
-    if (!mapaSimbolos[symbol]){ btn.disabled = false; return err("No encuentro «" + n + "» en Binance."); }
+    if (!mapaSimbolos[symbol]) return err("No encuentro «" + n + "» en Binance.");
+    if (posiciones.some(p => p.symbol === symbol)) return err("Ya estás vigilando " + symbol.replace("USDT","") + ".");
     const fl = filtros[symbol] || {};
-    posVigilada = {
+    posiciones.push({
+      id: "p" + posiciones.length + "_" + symbol,
       symbol: symbol, nombre: symbol.replace("USDT",""),
       long: v("vDir") === "long", entrada: entrada, cant: cant,
       tp: tp > 0 ? tp : null, sl: sl,
       dec: fl.tick ? decimalesDe(fl.tick) : 4
-    };
+    });
     guardarPos();
-    document.getElementById("vivoPanel").style.display = "";
-    document.getElementById("vivoForm").style.display = "none";
-    document.getElementById("vTitulo").textContent = posVigilada.nombre + " · " + (posVigilada.long ? "COMPRA (LONG)" : "VENTA (SHORT)") + " · " + cant + " monedas";
+    ["vMoneda","vEntrada","vCant","vTP","vSL"].forEach(i => document.getElementById(i).value = "");
     await leerMercadoPos();
     await latido();
-    clearInterval(timerPos); clearInterval(timerMercadoPos);
-    timerPos = setInterval(latido, 5000);
-    timerMercadoPos = setInterval(leerMercadoPos, 60000);
+    arrancarRelojes();
   } finally { btn.disabled = false; }
 }
 
-function pararVigilancia(){
+function quitarPosicion(id){
+  posiciones = posiciones.filter(p => p.id !== id);
+  guardarPos();
+  if (!posiciones.length){ clearInterval(timerPos); clearInterval(timerMercadoPos); timerPos = timerMercadoPos = null; }
+  pintarTodo();
+}
+
+function arrancarRelojes(){
   clearInterval(timerPos); clearInterval(timerMercadoPos);
-  timerPos = timerMercadoPos = null; posVigilada = null; mercadoPos = null;
-  try { localStorage.removeItem("radar_posicion"); } catch (e){}
-  document.getElementById("vivoPanel").style.display = "none";
-  document.getElementById("vivoForm").style.display = "";
+  if (!posiciones.length) return;
+  timerPos = setInterval(latido, 5000);
+  timerMercadoPos = setInterval(leerMercadoPos, 60000);
 }
 
-// Lectura del mercado: tendencia de la moneda, si está picado y hacia dónde va Bitcoin.
+// Lectura del mercado de cada moneda: tendencia, si está picado, techo/suelo y Bitcoin.
 async function leerMercadoPos(){
-  if (!posVigilada) return;
-  try {
-    const tf = document.getElementById("tf").value;
-    const r = await fetch(API + "/fapi/v1/klines?symbol=" + posVigilada.symbol + "&interval=" + tf + "&limit=300");
-    if (!r.ok) return;
-    const velas = await r.json();
-    if (!Array.isArray(velas) || velas.length < 60) return;
-    const c = velas.map(x => parseFloat(x[4]));
-    const alt = velas.map(x => parseFloat(x[2])), baj = velas.map(x => parseFloat(x[3]));
-    mercadoPos = {
-      e20: ema(c, 20), e50: ema(c, 50),
-      efic: eficiencia(c, 20),
-      atr: atr(alt, baj, c, 14),
-      techo: Math.max.apply(null, alt.slice(-100)),
-      suelo: Math.min.apply(null, baj.slice(-100))
-    };
-    if (!ctxBTC) ctxBTC = await tendenciaDe("BTCUSDT", tfSuperior(tf));
-  } catch (e){ /* se reintenta al minuto siguiente */ }
-}
-
-async function latido(){
-  if (!posVigilada) return;
-  try {
-    const r = await fetch(API + "/fapi/v1/premiumIndex?symbol=" + posVigilada.symbol);
-    if (!r.ok) return;
-    pintarVivo(parseFloat((await r.json()).markPrice));
-  } catch (e){
-    document.getElementById("vActualizado").textContent = "Sin conexión con Binance; reintentando…";
+  const tf = document.getElementById("tf").value;
+  for (const p of posiciones){
+    try {
+      const r = await fetch(API + "/fapi/v1/klines?symbol=" + p.symbol + "&interval=" + tf + "&limit=300");
+      if (!r.ok) continue;
+      const velas = await r.json();
+      if (!Array.isArray(velas) || velas.length < 60) continue;
+      const c = velas.map(x => parseFloat(x[4]));
+      const alt = velas.map(x => parseFloat(x[2])), baj = velas.map(x => parseFloat(x[3]));
+      p.mercado = {
+        e20: ema(c, 20), e50: ema(c, 50), efic: eficiencia(c, 20),
+        techo: Math.max.apply(null, alt.slice(-100)), suelo: Math.min.apply(null, baj.slice(-100))
+      };
+    } catch (e){ /* se reintenta al minuto siguiente */ }
+  }
+  if (!ctxBTC && posiciones.length){
+    try { ctxBTC = await tendenciaDe("BTCUSDT", tfSuperior(tf)); } catch (e){}
   }
 }
 
-function pintarVivo(precio){
-  const p = posVigilada, m = mercadoPos, s = p.long ? 1 : -1;
-  const dec = p.dec;
-  const R = Math.abs(p.entrada - p.sl);                 // lo que arriesgas por moneda
-  const avanceR = s * (precio - p.entrada) / R;         // cuántas "R" llevas ganadas
+async function latido(){
+  if (!posiciones.length) return;
+  try {
+    const r = await fetch(API + "/fapi/v1/premiumIndex");
+    if (!r.ok) return;
+    const todos = await r.json();
+    const mapa = {};
+    for (const x of todos) mapa[x.symbol] = parseFloat(x.markPrice);
+    posiciones.forEach(p => { if (mapa[p.symbol]) p.precio = mapa[p.symbol]; });
+    pintarTodo();
+  } catch (e){ /* sin conexión: se reintenta en 5 s */ }
+}
+
+// Analiza UNA posición y devuelve sus cifras y su veredicto.
+function analizarPos(p){
+  const s = p.long ? 1 : -1, precio = p.precio, dec = p.dec, m = p.mercado;
+  const R = Math.abs(p.entrada - p.sl);
+  const avanceR = s * (precio - p.entrada) / R;
   const pnl = p.cant * (precio - p.entrada) * s;
   const pnlPct = (precio - p.entrada) / p.entrada * 100 * s;
-  const aSL = Math.abs(precio - p.sl) / precio * 100;
-  const aTP = p.tp ? Math.abs(p.tp - precio) / precio * 100 : null;
 
-  // ---- Cifras ----
-  document.getElementById("vCifras").innerHTML =
-    "<div class='resumen' style='grid-template-columns:repeat(3,1fr)'>" +
-    "<div class='rcel inv'><span class='rt'>Precio ahora</span><span class='rv'>" + fmtPrecio(precio, dec) + "</span>" +
-      "<span class='rs'>entraste en " + fmtPrecio(p.entrada, dec) + "</span></div>" +
-    "<div class='rcel " + (pnl >= 0 ? "gan" : "per") + "'><span class='rt'>Vas " + (pnl >= 0 ? "ganando" : "perdiendo") + "</span>" +
-      "<span class='rv " + (pnl >= 0 ? "up" : "down") + "'>" + (pnl >= 0 ? "+" : "−") + "$" + Math.abs(pnl).toFixed(2) + "</span>" +
-      "<span class='rs'>" + (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(2) + "% · " + avanceR.toFixed(2) + " de tu riesgo</span></div>" +
-    "<div class='rcel'><span class='rt'>Distancias</span><span class='rv' style='font-size:15px'>🛑 " + aSL.toFixed(2) + "%" +
-      (aTP !== null ? "<br>🎯 " + aTP.toFixed(2) + "%" : "") + "</span>" +
-      "<span class='rs'>hasta tu stop / objetivo</span></div></div>";
+  const senales = [];
+  let alerta = 0;
+  if (m){
+    const tendOk = p.long ? m.e20 >= m.e50 : m.e20 <= m.e50;
+    if (!tendOk){ alerta += 2; senales.push("✘ La tendencia de " + p.nombre + " se dio la vuelta: ya no acompaña a tu operación."); }
+    else senales.push("✔ La tendencia sigue de tu lado.");
+    if (m.efic < 0.2){ alerta += 1; senales.push("✘ Mercado picado (eficiencia " + (m.efic*100).toFixed(0) + "%): puede alcanzar tu stop por puro ruido."); }
+    else if (m.efic >= 0.35) senales.push("✔ El movimiento es limpio (eficiencia " + (m.efic*100).toFixed(0) + "%).");
+    const muro = p.long ? m.techo : m.suelo;
+    if (p.tp && (p.long ? (muro > precio && muro < p.tp) : (muro < precio && muro > p.tp))){
+      alerta += 1;
+      senales.push("• Hay un " + (p.long ? "techo" : "suelo") + " en " + fmtPrecio(muro, dec) + " entre el precio y tu objetivo: ahí suele frenarse.");
+    }
+  }
+  if (ctxBTC && p.symbol !== "BTCUSDT"){
+    const btcOk = p.long ? ctxBTC.alcista : ctxBTC.bajista;
+    if (!btcOk){ alerta += 2; senales.push("✘ Bitcoin va en tu contra, y casi todas las monedas lo siguen."); }
+    else senales.push("✔ Bitcoin acompaña tu dirección.");
+  }
 
-  // ---- Barra entre el stop y el objetivo ----
+  const tocoSL = p.long ? precio <= p.sl : precio >= p.sl;
+  const tocoTP = p.tp && (p.long ? precio >= p.tp : precio <= p.tp);
+  let clase, titulo, texto;
+  if (tocoSL){
+    clase = "no"; titulo = "SAL YA — el precio pasó tu stop";
+    texto = "El precio está en " + fmtPrecio(precio, dec) + ", más allá de tu Stop Loss de " + fmtPrecio(p.sl, dec) +
+      ". Si la posición sigue abierta es que el stop no se colocó o no se ejecutó: ciérrala a mercado y revisa tus órdenes.";
+  } else if (tocoTP){
+    clase = "si"; titulo = "SAL — objetivo cumplido";
+    texto = "Llegaste a tu Take Profit con +$" + pnl.toFixed(2) + ". Si tu orden estaba puesta ya debería haber cerrado sola. Cobra y no busques más aquí.";
+  } else if (avanceR >= 1 && alerta >= 2){
+    clase = "quiza"; titulo = "ASEGURA YA — ganas pero el mercado se giró";
+    texto = "Llevas +$" + pnl.toFixed(2) + " y las condiciones que justificaban la operación se rompen. Lo prudente es cerrar y quedarte con lo ganado, o cerrar la mitad y subir el stop a tu entrada.";
+  } else if (avanceR >= 1){
+    clase = "si"; titulo = "ASEGURA — cierra la mitad y protege el resto";
+    texto = "Ya ganaste " + avanceR.toFixed(1) + " veces lo que arriesgabas (+$" + pnl.toFixed(2) + "). Cierra la mitad y mueve el stop a tu precio de entrada: desde ahí esta operación no puede quitarte dinero.";
+  } else if (alerta >= 3){
+    clase = "no"; titulo = "SAL — la razón por la que entraste ya no existe";
+    texto = "El mercado se giró en tu contra por varios motivos a la vez. " +
+      (pnl >= 0 ? "Vas ganando $" + pnl.toFixed(2) + ": recógelo antes de que se dé la vuelta."
+                : "Llevas −$" + Math.abs(pnl).toFixed(2) + ". Salir ahora es perder menos que esperar al stop.");
+  } else if (alerta === 2){
+    clase = "quiza"; titulo = "OJO — vigílala de cerca";
+    texto = "Algo se torció en el mercado, pero tu plan sigue vivo. Si puedes estar pendiente, quédate; si no vas a poder mirarla, cerrar aquí es razonable.";
+  } else if (avanceR <= -0.7){
+    clase = "quiza"; titulo = "SIGUE — pero estás cerca del stop";
+    texto = "Vas perdiendo $" + Math.abs(pnl).toFixed(2) + " y el precio se acercó a tu stop. El mercado no se ha girado, así que deja que el stop haga su trabajo. <b>No lo alejes</b>: ese es el error que convierte una pérdida pequeña en una grande.";
+  } else {
+    clase = "si"; titulo = "SIGUE — todo según el plan";
+    texto = pnl >= 0
+      ? "Vas ganando $" + pnl.toFixed(2) + " y el mercado acompaña. Deja correr hasta " + (p.tp ? "tu objetivo de " + fmtPrecio(p.tp, dec) : "tu objetivo") + " o hasta 1 vez tu riesgo, donde tocará asegurar."
+      : "Llevas −$" + Math.abs(pnl).toFixed(2) + ", pero es movimiento normal y las condiciones siguen bien. Tu stop te protege. Aguanta el plan.";
+  }
+  return { pnl: pnl, pnlPct: pnlPct, avanceR: avanceR, senales: senales, clase: clase, titulo: titulo, texto: texto };
+}
+
+function tarjetaPos(p){
+  const dec = p.dec;
+  if (!p.precio) return "<div class='cajaOp'><h2>" + p.nombre + "</h2><div class='planVacio'>Buscando su precio…</div></div>";
+  const a = analizarPos(p);
+  const aSL = Math.abs(p.precio - p.sl) / p.precio * 100;
+  const aTP = p.tp ? Math.abs(p.tp - p.precio) / p.precio * 100 : null;
+
+  let barra = "";
   if (p.tp){
     const total = Math.abs(p.tp - p.sl);
-    const pos = Math.max(0, Math.min(100, Math.abs(precio - p.sl) / total * 100));
-    const entradaPos = Math.max(0, Math.min(100, Math.abs(p.entrada - p.sl) / total * 100));
-    document.getElementById("vBarra").innerHTML =
-      "<div style='margin:14px 0 4px'><div style='position:relative; height:26px; border-radius:13px; background:linear-gradient(90deg,#3a1418,#1f2937 " +
-      entradaPos.toFixed(0) + "%,#12301f)'>" +
-      "<div style='position:absolute; left:" + entradaPos.toFixed(1) + "%; top:-4px; bottom:-4px; width:2px; background:var(--muted)'></div>" +
+    const pos = Math.max(0, Math.min(100, Math.abs(p.precio - p.sl) / total * 100));
+    const ent = Math.max(0, Math.min(100, Math.abs(p.entrada - p.sl) / total * 100));
+    barra = "<div style='margin:14px 0 4px'><div style='position:relative; height:24px; border-radius:12px; background:linear-gradient(90deg,#3a1418,#1f2937 " +
+      ent.toFixed(0) + "%,#12301f)'>" +
+      "<div style='position:absolute; left:" + ent.toFixed(1) + "%; top:-4px; bottom:-4px; width:2px; background:var(--muted)'></div>" +
       "<div style='position:absolute; left:" + pos.toFixed(1) + "%; top:-6px; bottom:-6px; width:4px; background:#fff; border-radius:2px; box-shadow:0 0 8px rgba(255,255,255,.6)'></div>" +
       "</div><div style='display:flex; justify-content:space-between; font-size:11.5px; color:var(--muted); margin-top:5px'>" +
       "<span>🛑 " + fmtPrecio(p.sl, dec) + "</span><span>entrada</span><span>🎯 " + fmtPrecio(p.tp, dec) + "</span></div></div>";
   }
 
-  // ---- Lectura del mercado ----
-  const señales = [];
-  let alerta = 0;   // cuanto más alto, más motivos para salir
-  if (m){
-    const tendOk = p.long ? m.e20 >= m.e50 : m.e20 <= m.e50;
-    if (!tendOk){ alerta += 2; señales.push("✘ La tendencia de " + p.nombre + " se dio la vuelta: ya no acompaña a tu operación."); }
-    else señales.push("✔ La tendencia sigue de tu lado.");
-    if (m.efic < 0.2){ alerta += 1; señales.push("✘ El mercado está picado (eficiencia " + (m.efic*100).toFixed(0) + "%): avanza a tirones y puede alcanzar tu stop por ruido."); }
-    else if (m.efic >= 0.35) señales.push("✔ El movimiento es limpio (eficiencia " + (m.efic*100).toFixed(0) + "%).");
-    const muro = p.long ? m.techo : m.suelo;
-    if (p.tp && (p.long ? (muro > precio && muro < p.tp) : (muro < precio && muro > p.tp))){
-      alerta += 1;
-      señales.push("• Hay un " + (p.long ? "techo" : "suelo") + " en " + fmtPrecio(muro, dec) + ", entre el precio y tu objetivo: es donde suele frenarse.");
-    }
-  }
-  if (ctxBTC && p.symbol !== "BTCUSDT"){
-    const btcOk = p.long ? ctxBTC.alcista : ctxBTC.bajista;
-    if (!btcOk){ alerta += 2; señales.push("✘ Bitcoin va en tu contra, y casi todas las monedas lo siguen."); }
-    else señales.push("✔ Bitcoin acompaña tu dirección.");
-  }
-  document.getElementById("vMercado").innerHTML =
-    "<div class='nota' style='margin-top:12px'><b>Cómo veo el mercado ahora:</b><ul style='margin:6px 0 0 18px'>" +
-    señales.map(x => "<li>" + x + "</li>").join("") + "</ul></div>";
+  return "<div class='cajaOp' style='border-color:" + (a.pnl >= 0 ? "var(--border)" : "rgba(229,72,77,.55)") + "'>" +
+    "<div style='display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px'>" +
+    "<h2 style='margin:0'>" + (a.pnl < 0 ? "🔴 " : "🟢 ") + p.nombre + " · " + (p.long ? "COMPRA (LONG)" : "VENTA (SHORT)") + " · " + p.cant + " monedas</h2>" +
+    "<button onclick=\"quitarPosicion('" + p.id + "')\" style='background:var(--panel2); border:1px solid var(--border); color:var(--muted); padding:6px 13px; font-size:12.5px; border-radius:6px; cursor:pointer'>Quitar</button></div>" +
+    "<div class='dictamen " + a.clase + "' style='margin-top:4px'><span class='dt'>" + a.titulo + "</span><span class='dx'>" + a.texto + "</span></div>" +
+    "<div class='resumen' style='grid-template-columns:repeat(3,1fr)'>" +
+    "<div class='rcel inv'><span class='rt'>Precio ahora</span><span class='rv'>" + fmtPrecio(p.precio, dec) + "</span>" +
+      "<span class='rs'>entraste en " + fmtPrecio(p.entrada, dec) + "</span></div>" +
+    "<div class='rcel " + (a.pnl >= 0 ? "gan" : "per") + "'><span class='rt'>Vas " + (a.pnl >= 0 ? "ganando" : "perdiendo") + "</span>" +
+      "<span class='rv " + (a.pnl >= 0 ? "up" : "down") + "'>" + (a.pnl >= 0 ? "+" : "−") + "$" + Math.abs(a.pnl).toFixed(2) + "</span>" +
+      "<span class='rs'>" + (a.pnlPct >= 0 ? "+" : "") + a.pnlPct.toFixed(2) + "% · " + a.avanceR.toFixed(2) + " de tu riesgo</span></div>" +
+    "<div class='rcel'><span class='rt'>Distancias</span><span class='rv' style='font-size:15px'>🛑 " + aSL.toFixed(2) + "%" +
+      (aTP !== null ? "<br>🎯 " + aTP.toFixed(2) + "%" : "") + "</span><span class='rs'>hasta stop / objetivo</span></div></div>" +
+    barra +
+    "<div class='nota' style='margin-top:12px'><b>Cómo veo el mercado:</b><ul style='margin:6px 0 0 18px'>" +
+    a.senales.map(x => "<li>" + x + "</li>").join("") + "</ul></div></div>";
+}
 
-  // ---- Veredicto ----
-  let clase, titulo, texto;
-  const tocoSL = p.long ? precio <= p.sl : precio >= p.sl;
-  const tocoTP = p.tp && (p.long ? precio >= p.tp : precio <= p.tp);
+function pintarTodo(){
+  const cont = document.getElementById("vTarjetas");
+  cont.innerHTML = posiciones.map(tarjetaPos).join("");
+  document.getElementById("vCupo").textContent = posiciones.length ? "(" + posiciones.length + " de " + MAX_POS + ")" : "";
+  document.getElementById("vivoForm").style.display = posiciones.length >= MAX_POS ? "none" : "";
 
-  if (tocoSL){
-    clase = "no"; titulo = "SAL YA — el precio pasó tu stop";
-    texto = "El precio está en " + fmtPrecio(precio, dec) + ", más allá de tu Stop Loss de " + fmtPrecio(p.sl, dec) +
-      ". Si la posición sigue abierta es que el stop no llegó a colocarse o no se ejecutó: ciérrala a mercado y revisa tus órdenes.";
-  } else if (tocoTP){
-    clase = "si"; titulo = "SAL — objetivo cumplido";
-    texto = "Llegaste a tu Take Profit con +$" + pnl.toFixed(2) + ". Si tu orden estaba puesta ya debería haber cerrado sola. Cobra y no busques más en esta operación.";
-  } else if (avanceR >= 1 && alerta >= 2){
-    clase = "quiza"; titulo = "ASEGURA YA — vas ganando pero el mercado se giró";
-    texto = "Llevas +$" + pnl.toFixed(2) + " y las condiciones que justificaban la operación se están rompiendo. Lo prudente es cerrar y quedarte con lo ganado, o al menos cerrar la mitad y subir el stop a tu precio de entrada.";
-  } else if (avanceR >= 1){
-    clase = "si"; titulo = "ASEGURA — cierra la mitad y protege el resto";
-    texto = "Ya ganaste " + avanceR.toFixed(1) + " veces lo que arriesgabas (+$" + pnl.toFixed(2) + "). Cierra la mitad y mueve el stop a tu precio de entrada: a partir de ahí esta operación no puede quitarte dinero.";
-  } else if (alerta >= 3){
-    clase = "no"; titulo = "SAL — la razón por la que entraste ya no existe";
-    texto = "El mercado se giró en tu contra por varios motivos a la vez. " +
-      (pnl >= 0 ? "Vas ganando $" + pnl.toFixed(2) + ": recógelo antes de que se dé la vuelta." :
-                  "Llevas −$" + Math.abs(pnl).toFixed(2) + ". Salir ahora es perder menos que esperar al stop.");
-  } else if (alerta === 2){
-    clase = "quiza"; titulo = "OJO — vigílala de cerca";
-    texto = "Algo se torció en el mercado, pero tu plan sigue vivo. Si puedes estar pendiente, quédate; si no vas a poder mirarla, cerrar aquí es una decisión razonable.";
-  } else if (avanceR <= -0.7){
-    clase = "quiza"; titulo = "SIGUE — pero estás cerca del stop";
-    texto = "Vas perdiendo $" + Math.abs(pnl).toFixed(2) + " y el precio se acercó a tu stop. El mercado no se ha girado, así que lo correcto es dejar que el stop haga su trabajo. <b>No lo alejes</b> para darle margen: ese es el error que convierte una pérdida pequeña en una grande.";
-  } else {
-    clase = "si"; titulo = "SIGUE — todo según el plan";
-    texto = pnl >= 0
-      ? "Vas ganando $" + pnl.toFixed(2) + " y el mercado acompaña. Deja correr hasta " + (p.tp ? "tu objetivo de " + fmtPrecio(p.tp, dec) : "tu objetivo") + " o hasta que llegues a 1 vez tu riesgo, donde tocará asegurar."
-      : "Llevas −$" + Math.abs(pnl).toFixed(2) + ", pero es movimiento normal y las condiciones siguen bien. Tu stop está a " + aSL.toFixed(2) + "% y te protege. Aguanta el plan.";
-  }
-  document.getElementById("vVeredicto").innerHTML =
-    "<div class='dictamen " + clase + "' style='margin-top:6px'><span class='dt'>" + titulo + "</span><span class='dx'>" + texto + "</span></div>";
-  document.getElementById("vActualizado").textContent = "Actualizado " + new Date().toLocaleTimeString("es-EC") + " · precio de marca, cada 5 segundos";
+  // Alerta bien visible si alguna va en pérdida, y aviso en la pestaña para verlo
+  // aunque estés en otra pantalla.
+  const vivas = posiciones.filter(p => p.precio).map(p => ({ p: p, a: analizarPos(p) }));
+  const enRojo   = vivas.filter(x => x.a.pnl < 0);
+  const urgentes = vivas.filter(x => x.a.titulo.indexOf("SAL YA") === 0 || x.a.titulo.indexOf("SAL — la razón") === 0);
+  const logrados = vivas.filter(x => x.a.titulo.indexOf("SAL — objetivo") === 0);
+  const al = document.getElementById("vAlerta");
+  let html = "";
+  if (urgentes.length)
+    html += "<div class='nota alerta' style='border-color:var(--red); background:#2a1214; color:#ffb3b6; font-size:15px; margin-bottom:10px'>" +
+      "🚨 <b>Actúa ya en " + urgentes.map(x => x.p.nombre).join(" y ") + ":</b> " +
+      urgentes.map(x => x.a.titulo.replace("SAL YA — ", "").replace("SAL — ", "")).join(" · ") + ". Míralo abajo.</div>";
+  if (logrados.length)
+    html += "<div class='nota' style='border-color:var(--green); background:#0f1f17; color:#8fe0b4; font-size:15px; margin-bottom:10px'>" +
+      "🎯 <b>" + logrados.map(x => x.p.nombre).join(" y ") + " llegó a su objetivo</b> (+$" +
+      logrados.reduce((t, x) => t + x.a.pnl, 0).toFixed(2) + "). Cobra y no busques más ahí.</div>";
+  const rojoNoUrgente = enRojo.filter(x => urgentes.indexOf(x) < 0);
+  if (rojoNoUrgente.length)
+    html += "<div class='nota alerta' style='margin-bottom:10px; font-size:14.5px'>🔴 <b>" +
+      (rojoNoUrgente.length > 1 ? "Tus dos posiciones van" : rojoNoUrgente[0].p.nombre + " va") + " en pérdida:</b> " +
+      rojoNoUrgente.map(x => x.p.nombre + " −$" + Math.abs(x.a.pnl).toFixed(2)).join(" · ") +
+      ". Tu stop sigue protegiéndote; revisa abajo el veredicto de cada una.</div>";
+  al.innerHTML = html;
+
+  const badge = document.getElementById("avisoPestana");
+  if (badge) badge.textContent = urgentes.length ? " 🚨" : (enRojo.length ? " 🔴" : (logrados.length ? " 🎯" : ""));
 }
 
 // ---------- Calculadora de ganancia y pérdida ----------
@@ -1917,6 +1966,22 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
   const filaFund     = d.funding !== undefined ? fila("Funding (cada " + d.fundingHoras + " h)", (d.funding*100).toFixed(4) + "% · " + descFunding(d.funding, long)) : "";
 
   // Las tres cifras que de verdad importan, bien grandes y antes que nada.
+  // Ficha rápida: lo mínimo para colocar la orden, en el orden en que ella lo necesita.
+  const fr = (n, k, v, clase) => "<div class='fila" + (clase ? " " + clase : "") + "'><span class='k'><span class='n'>" + n + "</span>" + k + "</span><span class='v'>" + v + "</span></div>";
+  const fichaRapida = !gananciaPrimero ? "" :
+    "<div class='rapida'>" +
+    "<div class='cabRapida'><span>💵 ¿Cuánto pongo en " + d.nombre + "?</span>" +
+    "<input type='number' id='montoRapido' value='" + (inversion !== null ? inversion.toFixed(2) : margen.toFixed(2)) +
+    "' min='1' step='5' onchange='cambiarMonto(this.value)'> <span class='pista'>US$</span></div>" +
+    "<div class='filas'>" +
+    fr(1, "Precio de entrada", fmtPrecio(entrada, dec) + " USDT") +
+    fr(2, "Posición", "<b>" + cantidad.toFixed(decQty) + " " + d.nombre + "</b> · $" + nocional.toFixed(2)) +
+    fr(3, "🎯 Take Profit", "<span class='up'>" + fmtPrecio(tp, dec) + "</span>") +
+    fr(4, "🛑 Stop Loss", "<span class='down'>" + fmtPrecio(sl, dec) + "</span>") +
+    fr(5, "Ganancia probable", "<span class='up'>+$" + gananciaNeta.toFixed(2) + "</span>", "destacada") +
+    fr(6, "Pérdida probable", "<span class='down'>−$" + perdidaTotal.toFixed(2) + "</span>", "destacada") +
+    "</div><div class='pista' style='margin-top:8px'>Ganancia y pérdida ya con las comisiones descontadas. Cambia el monto y todo se recalcula.</div></div>";
+
   const resumen = "<div class='resumen'>" +
     "<div class='rcel inv'><span class='rt'>Inviertes</span><span class='rv'>$" + margen.toFixed(2) + "</span>" +
       "<span class='rs'>margen aislado a " + lev + "x</span></div>" +
@@ -1946,7 +2011,7 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
       "y perderías <b>todo el margen depositado</b>. <b>Baja el apalancamiento</b> hasta que aquí aparezca ✔.</div>"
     : "";
 
-  return (gananciaPrimero ? resumen + alertaLiq : "") + "<div class='filas'>" + filas + "</div>" +
+  return (gananciaPrimero ? fichaRapida + alertaLiq : "") + "<div class='filas'>" + filas + "</div>" +
     (noSePuedePartir
       ? "<div class='nota alerta'>⚠️ <b>Esta posición no se puede partir en dos.</b> " + d.nombre + " solo se negocia de " + fl.paso +
         " en " + fl.paso + ", y con esta cantidad (" + cantidad.toFixed(decQty) + ") la mitad no llegaría al mínimo. " +
@@ -2462,18 +2527,23 @@ function pintarEstudio(top, btc, htf){
 
 // Arranque: se ejecuta al final, cuando todas las variables ya existen.
 pintarEstadoIA();
-// Si había una posición vigilada, se retoma sola al abrir la app.
+// Si había posiciones vigiladas, se retoman solas al abrir la app.
 (function(){
   const g = recuperarPos();
-  if (!g || !g.symbol) return;
-  posVigilada = g;
-  document.getElementById("vivoPanel").style.display = "";
-  document.getElementById("vivoForm").style.display = "none";
-  document.getElementById("vTitulo").textContent = g.nombre + " · " + (g.long ? "COMPRA (LONG)" : "VENTA (SHORT)") + " · " + g.cant + " monedas";
-  leerMercadoPos().then(latido);
-  timerPos = setInterval(latido, 5000);
-  timerMercadoPos = setInterval(leerMercadoPos, 60000);
+  if (!g.length) return;
+  posiciones = g;
+  pintarTodo();
+  leerMercadoPos().then(latido).then(arrancarRelojes);
 })();
+
+// El recuadro de monto de la ficha rápida manda sobre el de arriba: se sincronizan.
+function cambiarMonto(v){
+  document.getElementById("montoInvertir").value = v;
+  if (ultimaConsulta){
+    document.getElementById("consultaResultado").innerHTML = htmlConsulta(ultimaConsulta.d, ultimaConsulta.tf);
+    arrancarVigilancia(ultimaConsulta.d);
+  }
+}
 
 function asesorarRecomendada(nombre){
   document.getElementById("monedaConsulta").value = nombre;
