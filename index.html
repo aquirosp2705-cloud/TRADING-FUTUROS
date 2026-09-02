@@ -1221,7 +1221,50 @@ function equivalenciaPos(){
 document.getElementById("vEntrada").addEventListener("input", equivalenciaPos);
 document.getElementById("vMoneda").addEventListener("input", equivalenciaPos);
 
-let editandoId = null; // si estamos corrigiendo una posición en vez de crear otra
+let editandoId = null;      // si estamos corrigiendo una posición en vez de crear otra
+let planParaVigilar = null; // último plan calculado en la pestaña Operar
+
+// Pasa el plan de Operar a la vigilancia, sin volver a escribir nada.
+function vigilarEstePlan(){
+  if (!planParaVigilar) return;
+  const q = planParaVigilar;
+  const ya = posiciones.find(p => p.symbol === q.symbol);
+  if (ya){
+    // Ya la vigila: se actualizan sus datos con los del plan nuevo.
+    Object.assign(ya, { long: q.long, entrada: q.entrada, cant: q.cant, tp: q.tp, sl: q.sl, lev: q.lev, dec: q.dec });
+  } else if (posiciones.length >= MAX_POS){
+    rellenarFormConPlan();
+    irAVigilancia("Ya vigilas dos posiciones. Te dejé los datos cargados: quita una y pulsa «Añadir y vigilar».");
+    return;
+  } else {
+    posiciones.push({ id: "p" + Date.now() + "_" + q.symbol, symbol: q.symbol, nombre: q.nombre,
+      long: q.long, entrada: q.entrada, cant: q.cant, lev: q.lev, tp: q.tp, sl: q.sl, dec: q.dec });
+  }
+  guardarPos();
+  irAVigilancia("");
+  leerMercadoPos().then(latido).then(arrancarRelojes);
+}
+
+function rellenarFormConPlan(){
+  const q = planParaVigilar; if (!q) return;
+  const fl = filtros[q.symbol] || {};
+  const dq = fl.paso ? decimalesDe(fl.paso) : 6;
+  const set = (i, v) => document.getElementById(i).value = v;
+  set("vMoneda", q.nombre); set("vDir", q.long ? "long" : "short");
+  set("vEntrada", q.entrada); set("vUnidad", "moneda");
+  set("vCant", parseFloat(q.cant.toFixed(Math.max(dq, 2))));
+  set("vLev", q.lev); set("vTP", q.tp || ""); set("vSL", q.sl);
+  equivalenciaPos();
+}
+
+function irAVigilancia(aviso){
+  const b = [].slice.call(document.querySelectorAll("nav.tabs button"))
+    .filter(x => x.getAttribute("onclick") && x.getAttribute("onclick").indexOf("'vivo'") >= 0)[0];
+  if (b) verPestana("vivo", b);
+  document.getElementById("vError").innerHTML = aviso
+    ? "<div class='nota alerta' style='margin-top:12px'>" + aviso + "</div>" : "";
+  pintarTodo();
+}
 
 // Cargar una posición en el formulario para corregirla sin escribirlo todo de nuevo.
 function editarPosicion(id){
@@ -1960,6 +2003,13 @@ function verPestana(nombre, boton){
     document.getElementById("p-" + p).classList.toggle("oculto", p !== nombre));
   [].forEach.call(document.querySelectorAll("nav.tabs button"), b => b.classList.remove("activa"));
   if (boton) boton.classList.add("activa");
+  // Al entrar en la vigilancia, si el formulario está vacío se precarga con el último
+  // plan de Operar: así no hay que reescribir nada.
+  if (nombre === "vivo" && planParaVigilar && !editandoId && !document.getElementById("vMoneda").value.trim()){
+    rellenarFormConPlan();
+    document.getElementById("vEquiv").innerHTML +=
+      " <span style='color:#7fb2ff'>· cargado desde tu plan de " + planParaVigilar.nombre + ", puedes cambiar lo que quieras</span>";
+  }
   window.scrollTo(0, 0);
 }
 
@@ -2441,6 +2491,11 @@ function calcularFilasPlan(d, long, levFijo, gananciaPrimero){
     : filaEntrada + filaSL + filaTP1 + filaTP + filaCant + filaValor + filaLev + filaMargen + filaPerdida + filaGanancia + filaMuro + filaLiq + filaCom + filaFund;
 
   if (gananciaPrimero) nivelesPlan = posInvalida ? null : { long, sl, tp, cantidad: cantidad.toFixed(decQty), lev, margen: margen.toFixed(2), dec };
+  // Se guarda el plan completo para poder mandarlo a la pestaña Mi posición sin
+  // que ella tenga que volver a escribir nada.
+  if (gananciaPrimero && !posInvalida)
+    planParaVigilar = { symbol: d.symbol, nombre: d.nombre, long: long, entrada: entrada,
+      cant: cantidad, tp: tp, sl: sl, lev: lev, dec: dec };
 
   if (posInvalida)
     return "<div class='filas'>" + filas + "</div>" +
@@ -2680,7 +2735,10 @@ function fichaOrden(d, long, lev, cant, margen, sl, tp, dec){
     "<li>" + (long ? "En LONG el TP va ARRIBA del precio y el SL ABAJO." : "En SHORT el TP va ABAJO del precio y el SL ARRIBA.") + " Si los inviertes, Binance los rechaza.</li>" +
     "<li>No muevas el stop loss. Máximo 2 posiciones abiertas a la vez.</li>" +
     "<li>Los precios cambian cada segundo: recalcula justo antes de entrar.</li>" +
-    "</ul>";
+    "</ul>" +
+    "<button onclick='vigilarEstePlan()' style='margin-top:6px; padding:11px 18px; font-size:14px; background:var(--blue); border:none; color:#fff; font-weight:700; border-radius:8px; cursor:pointer'>" +
+    "📈 Ya la abrí — vigílamela</button>" +
+    "<div class='pista' style='margin-top:6px'>Pulsa esto cuando hayas abierto la operación en Binance: la paso a la pestaña «Mi posición» con estos mismos datos, lista para seguirla.</div>";
 }
 function fila(k, v){
   return "<div class='fila'><span class='k'>" + k + "</span><span class='v'>" + v + "</span></div>";
