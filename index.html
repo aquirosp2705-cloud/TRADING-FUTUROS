@@ -1228,7 +1228,7 @@ let planParaVigilar = null; // último plan calculado en la pestaña Operar
 function vigilarEstePlan(){
   if (!planParaVigilar) return;
   const q = planParaVigilar;
-  const ya = posiciones.find(p => p.symbol === q.symbol);
+  const ya = posiciones.find(p => p.symbol === q.symbol && p.long === q.long);
   if (ya){
     // Ya la vigila: se actualizan sus datos con los del plan nuevo.
     Object.assign(ya, { long: q.long, entrada: q.entrada, cant: q.cant, tp: q.tp, sl: q.sl, lev: q.lev, dec: q.dec });
@@ -1322,7 +1322,10 @@ async function anadirPosicion(){
     let symbol = n + "USDT";
     if (!mapaSimbolos[symbol] && mapaSimbolos["1000" + symbol]) symbol = "1000" + symbol;
     if (!mapaSimbolos[symbol]) return err("No encuentro «" + n + "» en Binance.");
-    if (posiciones.some(p => p.symbol === symbol && p.id !== editandoId)) return err("Ya estás vigilando " + symbol.replace("USDT","") + ".");
+    const dirNueva = v("vDir") === "long";
+    if (posiciones.some(p => p.symbol === symbol && p.long === dirNueva && p.id !== editandoId))
+      return err("Ya estás vigilando " + symbol.replace("USDT","") + " en " + (dirNueva ? "compra" : "venta") +
+        ". Puedes añadir la misma moneda en la dirección contraria para comparar cómo evolucionan las dos.");
     const fl = filtros[symbol] || {};
     const datos = {
       symbol: symbol, nombre: symbol.replace("USDT",""),
@@ -1365,7 +1368,9 @@ function arrancarRelojes(){
 // Lectura del mercado de cada moneda: tendencia, si está picado, techo/suelo y Bitcoin.
 async function leerMercadoPos(){
   const tf = document.getElementById("tf").value;
+  const yaLeidas = {};   // si vigila la misma moneda en las dos direcciones, se lee una vez
   for (const p of posiciones){
+    if (yaLeidas[p.symbol]){ p.mercado = yaLeidas[p.symbol]; continue; }
     try {
       const r = await fetch(API + "/fapi/v1/klines?symbol=" + p.symbol + "&interval=" + tf + "&limit=300");
       if (!r.ok) continue;
@@ -1377,6 +1382,7 @@ async function leerMercadoPos(){
         e20: ema(c, 20), e50: ema(c, 50), efic: eficiencia(c, 20),
         techo: Math.max.apply(null, alt.slice(-100)), suelo: Math.min.apply(null, baj.slice(-100))
       };
+      yaLeidas[p.symbol] = p.mercado;
     } catch (e){ /* se reintenta al minuto siguiente */ }
   }
   if (!ctxBTC && posiciones.length){
@@ -1462,6 +1468,9 @@ function analizarPos(p){
 }
 
 // La cantidad, con los decimales que de verdad usa esa moneda.
+// Nombre corto que distingue las dos caras de la misma moneda.
+function etiquetaPos(p){ return p.nombre + " " + (p.long ? "LONG" : "SHORT"); }
+
 function cantBonita(p){
   const fl = filtros[p.symbol] || {};
   const dq = fl.paso ? decimalesDe(fl.paso) : 4;
@@ -1537,18 +1546,33 @@ function pintarTodo(){
   let html = "";
   if (urgentes.length)
     html += "<div class='nota alerta' style='border-color:var(--red); background:#2a1214; color:#ffb3b6; font-size:15px; margin-bottom:10px'>" +
-      "🚨 <b>Actúa ya en " + urgentes.map(x => x.p.nombre).join(" y ") + ":</b> " +
+      "🚨 <b>Actúa ya en " + urgentes.map(x => etiquetaPos(x.p)).join(" y ") + ":</b> " +
       urgentes.map(x => x.a.titulo.replace("SAL YA — ", "").replace("SAL — ", "")).join(" · ") + ". Míralo abajo.</div>";
   if (logrados.length)
     html += "<div class='nota' style='border-color:var(--green); background:#0f1f17; color:#8fe0b4; font-size:15px; margin-bottom:10px'>" +
-      "🎯 <b>" + logrados.map(x => x.p.nombre).join(" y ") + " llegó a su objetivo</b> (+$" +
+      "🎯 <b>" + logrados.map(x => etiquetaPos(x.p)).join(" y ") + " llegó a su objetivo</b> (+$" +
       logrados.reduce((t, x) => t + x.a.pnl, 0).toFixed(2) + "). Cobra y no busques más ahí.</div>";
   const rojoNoUrgente = enRojo.filter(x => urgentes.indexOf(x) < 0);
   if (rojoNoUrgente.length)
     html += "<div class='nota alerta' style='margin-bottom:10px; font-size:14.5px'>🔴 <b>" +
-      (rojoNoUrgente.length > 1 ? "Tus dos posiciones van" : rojoNoUrgente[0].p.nombre + " va") + " en pérdida:</b> " +
-      rojoNoUrgente.map(x => x.p.nombre + " −$" + Math.abs(x.a.pnl).toFixed(2)).join(" · ") +
+      (rojoNoUrgente.length > 1 ? "Tus dos posiciones van" : etiquetaPos(rojoNoUrgente[0].p) + " va") + " en pérdida:</b> " +
+      rojoNoUrgente.map(x => etiquetaPos(x.p) + " −$" + Math.abs(x.a.pnl).toFixed(2)).join(" · ") +
       ". Tu stop sigue protegiéndote; revisa abajo el veredicto de cada una.</div>";
+  // Si vigila la misma moneda en las dos direcciones, se compara cómo va cada cara:
+  // es la forma más clara de ver que una gana justo lo que la otra pierde.
+  if (vivas.length === 2 && vivas[0].p.symbol === vivas[1].p.symbol){
+    const A = vivas[0], B = vivas[1];
+    const gana = A.a.pnl >= B.a.pnl ? A : B, pierde = gana === A ? B : A;
+    html += "<div class='nota' style='border-color:#2b6cb0; background:#101a22; margin-bottom:10px; font-size:14px'>" +
+      "⚖️ <b>Estás viendo las dos caras de " + A.p.nombre + ".</b> Ahora mismo va mejor la de <b>" +
+      (gana.p.long ? "compra (LONG)" : "venta (SHORT)") + "</b>: " +
+      (gana.a.pnl >= 0 ? "+$" : "−$") + Math.abs(gana.a.pnl).toFixed(2) + " frente a " +
+      (pierde.a.pnl >= 0 ? "+$" : "−$") + Math.abs(pierde.a.pnl).toFixed(2) + ". " +
+      "El precio se movió " + (A.p.long ? (A.a.pnlPct >= 0 ? "al alza" : "a la baja") : (A.a.pnlPct >= 0 ? "a la baja" : "al alza")) +
+      " desde tu entrada, así que la dirección acertada era esa. " +
+      "<b>Lo que gana una lo pierde la otra</b> (salvo comisiones): por eso no se abren las dos a la vez con dinero real — " +
+      "solo sirve, como ahora, para aprender viendo las dos posibilidades.</div>";
+  }
   al.innerHTML = html;
 
   const badge = document.getElementById("avisoPestana");
